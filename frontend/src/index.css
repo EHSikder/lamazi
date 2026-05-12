@@ -1,0 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Outfit:wght@300;400;500;600;700&family=Pinyon+Script&display=swap');
+@import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 36 67% 96%;          /* #fdf8f1 cream */
+    --foreground: 14 60% 14%;          /* #2b1812 deep ink */
+    --card: 0 0% 100%;
+    --card-foreground: 14 60% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 14 60% 14%;
+    --primary: 350 100% 17%;           /* #58000e maroon */
+    --primary-foreground: 36 67% 96%;
+    --secondary: 38 56% 78%;           /* #e7d2a5 gold */
+    --secondary-foreground: 14 60% 14%;
+    --muted: 38 40% 90%;
+    --muted-foreground: 14 25% 38%;
+    --accent: 38 56% 78%;
+    --accent-foreground: 350 100% 17%;
+    --destructive: 0 75% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 38 30% 86%;
+    --input: 38 30% 86%;
+    --ring: 350 100% 17%;
+    --chart-1: 350 100% 17%;
+    --chart-2: 38 56% 58%;
+    --chart-3: 14 60% 24%;
+    --chart-4: 25 60% 60%;
+    --chart-5: 60 30% 50%;
+    --radius: 0.875rem;
+  }
+  .dark {
+    --background: 14 80% 7%;
+    --foreground: 36 67% 96%;
+    --card: 14 60% 12%;
+    --card-foreground: 36 67% 96%;
+    --popover: 14 60% 12%;
+    --popover-foreground: 36 67% 96%;
+    --primary: 38 56% 78%;
+    --primary-foreground: 14 60% 14%;
+    --secondary: 14 60% 18%;
+    --secondary-foreground: 36 67% 96%;
+    --muted: 14 40% 18%;
+    --muted-foreground: 38 30% 70%;
+    --accent: 38 56% 78%;
+    --accent-foreground: 14 60% 14%;
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 14 40% 22%;
+    --input: 14 40% 22%;
+    --ring: 38 56% 78%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html, body { @apply bg-lamazi-neutral text-lamazi-ink; font-family: 'Outfit', system-ui, sans-serif; }
+  body { @apply antialiased; }
+  h1, h2, h3, h4, h5 { font-family: 'Fraunces', serif; letter-spacing: -0.01em; }
+  ::selection { background: #58000e; color: #fdf8f1; }
+}
+
+@layer components {
+  .container-lamazi { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-10; }
+
+  /* Pill primary button - maroon */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full
+      bg-lamazi-primary text-lamazi-neutral font-medium tracking-wide
+      transition-[transform,background-color,box-shadow] duration-200
+      hover:bg-lamazi-tertiary hover:-translate-y-0.5
+      active:translate-y-0 active:scale-[0.98]
+      disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+  }
+
+  /* Pill secondary button - gold */
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full
+      bg-lamazi-secondary text-lamazi-primary font-semibold tracking-wide
+      transition-[transform,background-color,box-shadow] duration-200
+      hover:bg-lamazi-secondary-deep hover:text-lamazi-neutral hover:-translate-y-0.5
+      active:translate-y-0 active:scale-[0.98];
+  }
+
+  /* Outline button */
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full
+      border border-lamazi-primary text-lamazi-primary font-medium
+      transition-colors duration-200
+      hover:bg-lamazi-primary hover:text-lamazi-neutral;
+  }
+
+  /* Brand wordmark */
+  .brand-wordmark {
+    @apply font-display text-2xl font-bold tracking-[0.3em] uppercase text-lamazi-primary;
+  }
+
+  /* Section title */
+  .section-eyebrow {
+    @apply inline-block font-script text-3xl text-lamazi-secondary-deep -mb-2;
+  }
+  .section-title {
+    @apply font-display text-4xl sm:text-5xl font-bold text-lamazi-primary leading-[1.05];
+  }
+  .section-subtitle {
+    @apply text-base sm:text-lg text-lamazi-muted max-w-2xl mx-auto;
+  }
+
+  /* Product card */
+  .product-card {
+    @apply bg-white rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(88,0,14,0.06)]
+      border border-lamazi-secondary/30
+      transition-[transform,box-shadow] duration-300
+      hover:shadow-[0_12px_36px_rgba(88,0,14,0.18)] hover:-translate-y-1
+      flex flex-col h-full;
+  }
+
+  /* Cream card */
+  .cream-card {
+    @apply bg-lamazi-secondary/40 rounded-2xl p-6 sm:p-8
+      border border-lamazi-secondary/60;
+  }
+
+  /* Admin sidebar item */
+  .admin-nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg
+      text-sm font-medium text-lamazi-neutral/80
+      transition-colors duration-150 cursor-pointer
+      hover:bg-lamazi-tertiary hover:text-lamazi-neutral;
+  }
+  .admin-nav-item.active {
+    @apply bg-lamazi-secondary text-lamazi-primary hover:bg-lamazi-secondary hover:text-lamazi-primary;
+  }
+}
+
+@layer utilities {
+  .truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+}
+
+/* Leaflet override - hide attribution flag clutter */
+.leaflet-control-attribution { font-size: 10px !important; }
+
+/* Visual edits wrapper kept */
+[data-debug-wrapper="true"] { display: contents !important; }

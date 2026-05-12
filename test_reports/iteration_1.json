@@ -1,0 +1,56 @@
+{
+  "summary": "Iteration 1 — comprehensive backend + frontend testing of LAMAZI Sweets MVP. Backend: 26/26 pytest tests passed including Supabase reads, order creation (cash), admin CRUD (categories, coupons, loyalty, operating-hours, settings), validation rules. Tap LIVE charge create verified once and cleaned up (order cancelled). Frontend: all 7 customer pages + admin login render correctly; 6 menu items from Supabase render with images & bilingual names; Item Detail Modal opens with image/price/notes/qty; header badge increments after Add to Bag. Mobile hamburger correctly replaces desktop nav at 390px. CRITICAL BUG FOUND: cart contents are wiped on hard page navigation due to a useEffect ordering bug in CartContext.jsx — this breaks the entire bag → checkout flow.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/coupons/validate", "issue": "Returns 404 for unknown code 'INVALID' (acceptable per spec). Test passes."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CartContext (/app/frontend/src/contexts/CartContext.jsx)",
+        "issue": "Cart is wiped on every hard page navigation. After clicking 'Add to bag' on /menu the header badge shows '1' correctly, but navigating to /bag shows 'Your bag is empty'. Root cause: two useEffects — effect-1 reads localStorage and calls setItems(saved), effect-2 writes JSON.stringify(items) to localStorage on every items change. On mount, effect-2 fires with the initial items=[] BEFORE effect-1's setItems has applied, overwriting the persisted cart with '[]'. Although effect-2 then re-fires after state updates, the visible /bag screen renders the empty state and the persisted cart can race-condition to empty on reload. Fix: gate the save-effect with a loaded flag (e.g. const [hydrated,setHydrated]=useState(false); set true in effect-1; in effect-2 if(!hydrated) return;).",
+        "selector": "data-testid for bag-empty-state not present; observed text 'Your bag is empty'",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "Bag/Checkout pages",
+        "issue": "Because of the CartContext bug above, Bag does not list items, coupon input is not rendered (only shown when items exist), 'Proceed to Checkout' cannot be reached, and /checkout cannot be tested for delivery toggle / Leaflet map / payment toggle / Place Order in a real user flow via hard nav. (Note: these widgets are implemented in Checkout.jsx per code review; testing was blocked by the cart bug.)",
+        "selector": "n/a",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Menu modal CTA", "issues": ["Card buttons say 'Add to Bag' (capital B) while modal CTA says 'Add to bag — 15.000 KWD' (lowercase b). Minor copy inconsistency."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lamazi_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX (critical): Add a hydration flag in /app/frontend/src/contexts/CartContext.jsx so the localStorage write effect does not fire before the initial read completes. Example:\n  const [hydrated, setHydrated] = useState(false);\n  useEffect(() => { const raw = localStorage.getItem(STORAGE_KEY); if (raw) setItems(JSON.parse(raw)); setHydrated(true); }, []);\n  useEffect(() => { if (!hydrated) return; localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }, [items, hydrated]);",
+    "After cart fix, re-test full bag → checkout → place order (cash) flow end-to-end via UI and confirm new Supabase order, then cleanup.",
+    "Minor: standardise 'Add to Bag' capitalisation between cards and modal CTA."
+  ],
+  "critical_code_review_comments": [
+    "CartContext.jsx: two useEffects race on mount and can wipe persisted cart (see ui_bugs above). High-impact one-line fix.",
+    "server.py is 1268 lines — consider splitting into routers (menu, orders, admin, integrations) for maintainability (>700 line guideline).",
+    "Admin endpoints under /api/admin/* have NO backend auth middleware — protected only at the frontend via /api/admin/check email lookup. Spec confirms this is intentional for Phase 1 but should be hardened before public launch (anyone with the URL can read/write tenant data).",
+    "Guest coupon usage tracking via orders.notes ILIKE '*guest_id:X*coupon:Y*' is fragile — works but should move to a proper guest_id column or coupon_usage row with NULL customer_id + guest_id field.",
+    "Tap LIVE keys committed in /app/backend/.env — must be rotated before production handover (user is aware)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lamazi_api.py (new)",
+    "/app/test_reports/pytest/pytest_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (26/26 pytest + 1 Tap live charge)", "frontend": "~85% — pages render, integration to backend works, but cart persistence broken on hard nav"},
+  "test_credentials": "No login required for tested endpoints. Admin login UI tested for render only (no credentials provided / admin user must be created manually in Supabase per spec).",
+  "seed_data_creation": "Created and cleaned up: 1 cash order (cancelled), 1 Tap LIVE charge (order cancelled), 1 test category (deleted), 1 test coupon TESTCOUP10 (deleted), 1 test customer row (left in customers table — id is a random UUID with email starting test_<uuid>@example.com).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend regression suite is /app/backend/tests/test_lamazi_api.py — runs in ~25s. Frontend critical-path retest needed after cart fix: (1) Menu /menu — click Add to Bag on first card, modal opens, click 'Add to bag — 15.000 KWD' inside modal, header badge shows 1; (2) hard navigate to /bag — items must remain visible, subtotal+delivery+total visible, coupon INVALID should show error toast; (3) Proceed to Checkout → /checkout — Leaflet map renders, delivery/takeaway toggle works, COD/Tap toggle works, Place Order with cash creates Supabase order. Selectors are NOT guaranteed via data-testid — most tests used text/role selectors. Suggest adding data-testid on: bag-item-row, bag-subtotal, bag-checkout-btn, checkout-payment-cod, checkout-payment-tap, checkout-place-order, item-modal, item-modal-add-button. Tap LIVE key still active — only do ONE charge create test maximum and cancel the order after.",
+  "rca_of_the_issue": "CartContext.jsx mount sequence (verified via reproduction): step 1 — first render with items=[]. step 2 — React fires both useEffects in declaration order after commit. step 3 — effect-1 reads localStorage and calls setItems(savedItems); this only SCHEDULES a state update. step 4 — effect-2 runs immediately after with the CURRENT items=[] and writes JSON.stringify([]) into localStorage, OVERWRITING the persisted cart. step 5 — state update from step 3 lands → re-render → effect-2 re-fires with items=saved → writes correct value back. The empty write in step 4 is what produces the visible empty bag on hard navigation if the page reads cart before the second effect-2 re-run completes. Mitigation: gate the writer with a hydrated flag (see action_items)."
+}
