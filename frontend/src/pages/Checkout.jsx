@@ -67,10 +67,12 @@ export default function Checkout() {
   const [coupon, setCoupon] = useState(null);
   const [pointsUsed, setPointsUsed] = useState(0);
   const [loyaltyDiscount, setLoyaltyDiscount] = useState(0);
+  const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
+    if (placing) return;
     if (items.length === 0) navigate('/bag');
-  }, [items, navigate]);
+  }, [items, navigate, placing]);
 
   useEffect(() => {
     api.get('/settings').then(({ data }) => {
@@ -237,6 +239,7 @@ export default function Checkout() {
     };
 
     setSubmitting(true);
+    setPlacing(true);
     try {
       const { data } = await api.post('/orders', body);
       sessionStorage.removeItem('lamazi_checkout_state');
@@ -245,10 +248,12 @@ export default function Checkout() {
         window.location.href = data.payment_url;
         return;
       }
-      clear();
-      navigate(`/order/${data.id}`);
+      navigate(`/order/${data.id}`, { replace: true });
+      // clear after navigation lands so the empty-bag redirect effect cannot fire
+      setTimeout(() => clear(), 0);
     } catch (e) {
       toast.error(apiError(e, 'Could not place order'));
+      setPlacing(false);
     } finally {
       setSubmitting(false);
     }
