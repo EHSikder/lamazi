@@ -5,19 +5,22 @@ const STORAGE_KEY = 'lamazi_cart_v1';
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState([]);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setItems(JSON.parse(raw));
     } catch { /* noop */ }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     } catch { /* noop */ }
-  }, [items]);
+  }, [items, hydrated]);
 
   const lineKey = (it) => {
     const mods = (it.modifiers || []).map((m) => `${m.id || m.name_en}:${m.quantity || 1}`).sort().join('|');

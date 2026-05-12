@@ -109,7 +109,7 @@ export default function Bag() {
           {items.map((it) => {
             const key = lineKey(it);
             return (
-              <div key={key} className="bg-white rounded-2xl border border-lamazi-secondary/40 p-4 flex gap-4">
+              <div key={key} data-testid="bag-item-row" className="bg-white rounded-2xl border border-lamazi-secondary/40 p-4 flex gap-4">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl bg-lamazi-secondary/30 overflow-hidden shrink-0">
                   {it.image_url && <img src={it.image_url} alt={it.item_name_en} className="w-full h-full object-cover" />}
                 </div>
@@ -155,7 +155,7 @@ export default function Bag() {
             <div className="space-y-3 mb-4 text-sm">
               <div className="flex justify-between">
                 <span className="text-lamazi-muted">Subtotal</span>
-                <span className="font-medium">{fmtKWD(subtotal)}</span>
+                <span className="font-medium" data-testid="bag-subtotal">{fmtKWD(subtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-lamazi-muted">Delivery (default)</span>

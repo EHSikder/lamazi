@@ -242,7 +242,7 @@ export default function ItemDetailModal({ open, itemId, onClose }) {
                   <button onClick={() => setQty((q) => q + 1)} className="p-1" data-testid="qty-plus"><Plus className="w-4 h-4 text-lamazi-primary" /></button>
                 </div>
                 <button onClick={handleAdd} className="btn-primary flex-1" data-testid="item-add-to-bag">
-                  Add to bag — {fmtKWD(totalPrice)}
+                  Add to Bag — {fmtKWD(totalPrice)}
                 </button>
               </div>
             </>

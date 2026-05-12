@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 2 — frontend-only retest after CartContext.jsx hydration fix. CART PERSISTENCE BUG IS FIXED: hard navigation /menu → /bag now preserves items, shows 1 row 'Golden Crust Cheesecake', subtotal 15.000 KWD + delivery 0.500 KWD = total 15.500 KWD. Coupon 'NOPE123' shows correct error toast 'Coupon not found or inactive'. Mobile 375px renders hamburger, no horizontal overflow. CASH ORDER FLOW: backend order WAS successfully created (id ba6d4c79, order #LMZ-20260512-2899, 15 KWD, takeaway, pending) but FRONTEND post-place-order REDIRECT IS BROKEN — instead of navigating to /order/<id>, user is redirected to /bag (which shows 'Your bag is empty'). Order detail page renders correctly when accessed directly. Cleanup: created order cancelled via PATCH /api/admin/orders/{id}/status. Item-modal CTA capitalisation now consistent ('Add to Bag — 15.000 KWD').",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Checkout → Place Order (cash)",
+        "issue": "After clicking checkout-place-order-btn, order is created on the backend (verified via /api/admin/orders) but the browser is redirected to /bag instead of /order/<id>. Root cause: in /app/frontend/src/pages/Checkout.jsx the useEffect at lines 71-73 watches `items.length === 0` and calls `navigate('/bag')`. After a successful POST /api/orders (line 241), the code calls `clear()` (line 248) BEFORE `navigate('/order/${data.id}')` (line 249). The clear() flips items to [], the useEffect's effect callback schedules navigate('/bag'), and that effect-driven navigation lands AFTER the explicit one — leaving the user on /bag with an empty cart. User sees a successful submission but no confirmation page. Fix options: (a) navigate FIRST then clear() after a microtask, e.g. `navigate(...); setTimeout(clear, 0);`, (b) gate the empty-bag redirect with a `submitting` / `placed` flag so the effect bails out, or (c) move the redirect-on-empty logic out of an effect into the proceed click handler. Same bug will also affect Tap payments path (line 244-245 calls clear() before window.location.href — though full page redirect there usually wins).",
+        "affected_selectors": ["[data-testid='checkout-place-order-btn']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "verified_passes": [
+    "Cart persistence on hard navigation (/menu add → reload → /bag still shows item) — CRITICAL BUG FIX VERIFIED",
+    "data-testid bag-item-row and bag-subtotal present and populated (15.000 KWD)",
+    "data-testid bag-checkout-btn navigates to /checkout",
+    "checkout-type-pickup, customer-name, customer-phone, checkout-payment-cod, checkout-place-order-btn all clickable/fillable",
+    "POST /api/orders succeeds with takeaway+cash payload (order LMZ-20260512-2899 created)",
+    "Order detail page /order/<id> renders order number, items, summary, status pill, customer info when navigated directly",
+    "Coupon 'NOPE123' shows error toast 'Coupon not found or inactive' via bag-coupon-input + bag-coupon-apply",
+    "Mobile 375px: hamburger button visible, no horizontal scrollbar (scrollWidth==clientWidth), hero text legible",
+    "Modal CTA text 'Add to Bag — 15.000 KWD' — capitalisation consistent with card buttons"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_lamazi_api.py (from iteration 1 — not re-run per instructions)"
+  ],
+  "action_items": [
+    "FIX (HIGH): /app/frontend/src/pages/Checkout.jsx placeOrder() — after successful POST /api/orders, call navigate(`/order/${data.id}`) BEFORE clear(), OR add a `submitted` flag that the empty-bag redirect effect (lines 71-73) checks and bails out. Currently the user sees an empty bag instead of the order confirmation, even though the order was created successfully on backend.",
+    "Optional: surface a 'Order placed!' toast in addition to the redirect for better UX."
+  ],
+  "critical_code_review_comments": [
+    "Checkout.jsx lines 71-73 + 248-249: classic React Router race between effect-driven redirect and imperative navigate. Same pattern was the root cause of iteration-1's CartContext bug — recommend a one-time code review across the app for any useEffect that imperatively navigates on state changes.",
+    "Carry-over from iteration 1 (still valid): server.py 1268 lines should be split; /api/admin/* still has no backend auth; Tap LIVE keys still in backend/.env."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (not re-run; verified order creation works end-to-end)", "frontend": "~90% — cart persistence fixed, only checkout post-submit redirect is broken"},
+  "test_credentials": "No login required for tested flows.",
+  "seed_data_creation": "Created and cleaned up: 1 cash order id=ba6d4c79-9747-4a5c-92bb-01245a91f699 (LMZ-20260512-2899) — cancelled via PATCH /api/admin/orders/{id}/status with status=cancelled (response {success:true,status:cancelled}).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Cart persistence bug from iter-1 is fully resolved (hydrated flag in CartContext.jsx works). Remaining open issue: Checkout.jsx post-place-order redirect race — same root-cause family as the iter-1 cart bug. Once fixed, retest the full bag → checkout → /order/<id> flow end-to-end and confirm Order Status timeline renders (status='pending'). Backend regression suite at /app/backend/tests/test_lamazi_api.py was NOT re-run this iteration per main agent instructions; it remains 26/26 passing per iteration 1. Tap LIVE charge was not tested again (avoid duplicate live charges).",
+  "rca_of_the_issue": "Checkout.jsx placeOrder flow: (1) POST /api/orders succeeds, returns data.id. (2) line 248 clear() sets cart items=[]. (3) React schedules a re-render; the useEffect at lines 71-73 is queued with the new items.length===0 dependency → it will call navigate('/bag'). (4) line 249 calls navigate(`/order/${data.id}`) synchronously. (5) After current synchronous block, React commits, the queued effect runs and navigate('/bag') executes AFTER navigate('/order/...'), winning the race. Net result: browser at /bag, items=[], shows 'Your bag is empty'. Backend order is created and reachable via direct URL. Mitigation: navigate before clear, or set a 'submitted' guard read by the redirect effect."
+}

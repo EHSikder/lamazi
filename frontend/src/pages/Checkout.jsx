@@ -388,7 +388,7 @@ export default function Checkout() {
                 <button
                   onClick={() => setPaymentMethod('cash')}
                   className={`flex items-center gap-3 p-4 rounded-xl border transition-colors text-left ${paymentMethod === 'cash' ? 'border-lamazi-primary bg-lamazi-secondary/30' : 'border-lamazi-secondary/60 bg-lamazi-neutral'}`}
-                  data-testid="payment-cash"
+                  data-testid="checkout-payment-cod"
                 >
                   <Banknote className="w-5 h-5 text-lamazi-primary" />
                   <div>
@@ -401,7 +401,7 @@ export default function Checkout() {
                 <button
                   onClick={() => setPaymentMethod('tap')}
                   className={`flex items-center gap-3 p-4 rounded-xl border transition-colors text-left ${paymentMethod === 'tap' ? 'border-lamazi-primary bg-lamazi-secondary/30' : 'border-lamazi-secondary/60 bg-lamazi-neutral'}`}
-                  data-testid="payment-online"
+                  data-testid="checkout-payment-tap"
                 >
                   <CreditCard className="w-5 h-5 text-lamazi-primary" />
                   <div>
