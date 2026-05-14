@@ -17,7 +17,7 @@ export default function Bag() {
   const [applying, setApplying] = useState(false);
 
   const [loyalty, setLoyalty] = useState({ enabled: false });
-  const [settings, setSettings] = useState({ delivery_fee: 0 });
+  const [settings, setSettings] = useState({ delivery_fee: 0, min_order_amount: 0 });
   const [pointsToRedeem, setPointsToRedeem] = useState(0);
 
   useEffect(() => {
@@ -115,9 +115,9 @@ export default function Bag() {
                 </div>
                 <div className="flex-1 flex flex-col">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-display text-lg text-lamazi-primary leading-tight">{it.item_name_en}</h3>
-                      {it.variant_name_en && <p className="text-xs text-lamazi-muted">{it.variant_name_en}</p>}
+                  <div>
+                    <h3 className="font-display text-lg text-lamazi-primary leading-tight">{it.item_name_ar && document.documentElement.lang === 'ar' ? it.item_name_ar : it.item_name_en}</h3>
+                    {it.variant_name_en && <p className="text-xs text-lamazi-muted">{it.variant_name_ar && document.documentElement.lang === 'ar' ? it.variant_name_ar : it.variant_name_en}</p>}
                       {(it.modifiers || []).length > 0 && (
                         <p className="text-xs text-lamazi-muted mt-1">
                           + {it.modifiers.map((m) => `${m.name_en}${m.quantity > 1 ? ` ×${m.quantity}` : ''}`).join(', ')}
@@ -233,7 +233,22 @@ export default function Bag() {
               <span className="font-display text-2xl font-bold text-lamazi-primary" data-testid="bag-total">{fmtKWD(total)}</span>
             </div>
 
-            <button onClick={proceed} className="btn-primary w-full" data-testid="bag-checkout-btn">
+            {settings.min_order_amount > 0 && subtotal < Number(settings.min_order_amount) && (
+              <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-300 flex items-start gap-2" data-testid="bag-min-order-warning">
+                <span className="text-amber-700 text-base">⚠</span>
+                <p className="text-sm text-amber-900">
+                  Minimum order amount is <span className="font-semibold">{fmtKWD(settings.min_order_amount)}</span>.
+                  Add <span className="font-semibold">{fmtKWD(Number(settings.min_order_amount) - subtotal)}</span> more to proceed.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={proceed}
+              disabled={settings.min_order_amount > 0 && subtotal < Number(settings.min_order_amount)}
+              className="btn-primary w-full"
+              data-testid="bag-checkout-btn"
+            >
               Proceed to Checkout
             </button>
             <p className="text-[11px] text-lamazi-muted text-center mt-2">

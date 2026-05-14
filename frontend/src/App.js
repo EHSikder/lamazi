@@ -4,6 +4,8 @@ import { Toaster } from 'sonner';
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
+import { LanguageProvider } from '@/contexts/LangContext';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -51,48 +53,53 @@ function MainLayout() {
 
 function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <BrowserRouter>
-          <Toaster position="top-center" richColors />
-          <Routes>
-            {/* Admin login (no admin shell) */}
-            <Route path="/admin/login" element={<AdminLogin />} />
+    <ErrorBoundary>
+      <LanguageProvider>
+        <AuthProvider>
+          <CartProvider>
+            <BrowserRouter>
+            <Toaster position="top-center" richColors />
+            <Routes>
+              {/* Admin login (no admin shell) */}
+              <Route path="/admin/login" element={<AdminLogin />} />
 
-            {/* Admin shell + nested */}
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="/admin/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="orders" element={<AdminOrders />} />
-              <Route path="menu" element={<AdminMenu />} />
-              <Route path="modifiers" element={<AdminModifiers />} />
-              <Route path="coupons" element={<AdminCoupons />} />
-              <Route path="coupon-usage" element={<AdminCouponUsage />} />
-              <Route path="loyalty" element={<AdminLoyalty />} />
-              <Route path="customers" element={<AdminCustomers />} />
-              <Route path="delivery-zones" element={<AdminDeliveryZones />} />
-              <Route path="operating-hours" element={<AdminOperatingHours />} />
-              <Route path="settings" element={<AdminSettings />} />
-            </Route>
+              {/* Admin shell + nested */}
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="orders" element={<AdminOrders />} />
+                <Route path="menu" element={<AdminMenu />} />
+                <Route path="modifiers" element={<AdminModifiers />} />
+                <Route path="coupons" element={<AdminCoupons />} />
+                <Route path="coupon-usage" element={<AdminCouponUsage />} />
+                <Route path="loyalty" element={<AdminLoyalty />} />
+                <Route path="customers" element={<AdminCustomers />} />
+                <Route path="delivery-zones" element={<AdminDeliveryZones />} />
+                <Route path="operating-hours" element={<AdminOperatingHours />} />
+                <Route path="settings" element={<AdminSettings />} />
+              </Route>
 
-            {/* Main website */}
-            <Route element={<MainLayout />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/menu" element={<Menu />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/loyalty" element={<Loyalty />} />
-              <Route path="/bag" element={<Bag />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/order/:id" element={<OrderTracking />} />
-              <Route path="/payment-result" element={<PaymentResult />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </CartProvider>
-    </AuthProvider>
+              {/* Main website */}
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<Home />} />
+                <Route path="/menu" element={<Menu />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/loyalty" element={<Loyalty />} />
+                <Route path="/bag" element={<Bag />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/order/:id" element={<OrderTracking />} />
+                <Route path="/payment-result" element={<PaymentResult />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </CartProvider>
+      </AuthProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   );
 }
 
 export default App;
+

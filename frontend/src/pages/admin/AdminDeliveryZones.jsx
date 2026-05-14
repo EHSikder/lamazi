@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Modal, Field } from './AdminMenu';
 import { fmtKWD } from '@/lib/utils-app';
-import { MapContainer, TileLayer, Polygon } from 'react-leaflet';
 
 export default function AdminDeliveryZones() {
   const [zones, setZones] = useState([]);
@@ -17,38 +16,26 @@ export default function AdminDeliveryZones() {
       <div className="flex items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="font-display text-3xl text-lamazi-primary font-bold">Delivery Zones</h1>
-          <p className="text-sm text-lamazi-muted">Polygon-based areas. Provide coordinates as JSON [[lng, lat], …].</p>
+          <p className="text-base text-lamazi-muted">Polygon-based areas. Provide coordinates as JSON [[lng, lat], …].</p>
         </div>
-        <button onClick={() => setEdit({})} className="btn-primary py-2 text-xs"><Plus className="w-4 h-4" /> New zone</button>
-      </div>
-
-      <div className="rounded-2xl overflow-hidden h-[300px] border border-lamazi-secondary/40 mb-6">
-        <MapContainer center={[29.3375, 47.9744]} zoom={11} style={{ height: '100%', width: '100%' }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
-          {zones.map((z) => {
-            const ring = Array.isArray(z.coordinates) ? z.coordinates : (z.coordinates?.coordinates?.[0] || []);
-            if (!ring?.length) return null;
-            const positions = ring.map(([a, b]) => Math.abs(a) <= 180 ? [b, a] : [a, b]);
-            return <Polygon key={z.id} positions={positions} pathOptions={{ color: '#58000e', weight: 2, fillOpacity: 0.12 }} />;
-          })}
-        </MapContainer>
+        <button onClick={() => setEdit({})} className="btn-primary py-2 text-sm"><Plus className="w-4 h-4" /> New zone</button>
       </div>
 
       <div className="space-y-3">
         {zones.map((z) => (
           <div key={z.id} className="bg-white rounded-2xl border border-lamazi-secondary/40 p-4 flex items-center justify-between">
             <div>
-              <p className="font-semibold text-lamazi-primary">{z.zone_name}</p>
-              <p className="text-xs text-lamazi-muted">Fee {fmtKWD(z.delivery_fee)} · min {fmtKWD(z.min_order_amount)} · ~{z.estimated_time_minutes} min</p>
+              <p className="text-lg font-semibold text-lamazi-primary">{z.zone_name}</p>
+              <p className="text-sm text-lamazi-muted">Fee {fmtKWD(z.delivery_fee)} · min {fmtKWD(z.min_order_amount)} · ~{z.estimated_time_minutes} min</p>
             </div>
             <div className="flex gap-1">
-              <span className={`text-xs px-2 py-1 rounded-full ${z.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700'}`}>{z.status}</span>
+              <span className={`text-sm px-2 py-1 rounded-full font-semibold ${z.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700'}`}>{z.status}</span>
               <button onClick={() => setEdit(z)} className="p-1.5 hover:bg-lamazi-secondary/30 rounded-full"><Pencil className="w-4 h-4" /></button>
               <button onClick={async () => { if (window.confirm('Delete zone?')) { await api.delete(`/admin/delivery-zones/${z.id}`); load(); } }} className="p-1.5 hover:bg-rose-100 rounded-full"><Trash2 className="w-4 h-4 text-rose-700" /></button>
             </div>
           </div>
         ))}
-        {zones.length === 0 && <p className="text-center text-lamazi-muted py-8">No delivery zones yet.</p>}
+        {zones.length === 0 && <p className="text-center text-lamazi-muted py-8 text-base">No delivery zones yet.</p>}
       </div>
 
       {edit && (

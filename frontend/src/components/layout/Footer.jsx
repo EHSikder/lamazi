@@ -10,7 +10,7 @@ export default function Footer() {
     <footer className="mt-20 bg-lamazi-tertiary text-lamazi-neutral">
       <div className="container-lamazi py-12 grid gap-10 md:grid-cols-3">
         <div className="space-y-3">
-          <div className="brand-wordmark text-lamazi-secondary">LAMAZI</div>
+          <div className="brand-wordmark-light text-xl sm:text-2xl">LAMAZI</div>
           <p className="text-sm text-lamazi-neutral/70 max-w-sm leading-relaxed">
             Hand-crafted cakes and Arabic sweets, baked fresh daily in Hawally. Bringing
             generations of recipes into every box we deliver.

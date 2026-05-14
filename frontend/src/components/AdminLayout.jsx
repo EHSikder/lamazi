@@ -77,15 +77,15 @@ export default function AdminLayout() {
       {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />}
 
       {/* main */}
-      <div className="flex-1 lg:ml-0 min-w-0">
+      <div className="flex-1 lg:ml-0 min-w-0 admin-shell">
         <header className="sticky top-0 z-20 bg-lamazi-neutral border-b border-lamazi-secondary/40 px-4 sm:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button className="lg:hidden p-2" onClick={() => setOpen(true)}>
               <MenuIcon className="w-5 h-5 text-lamazi-primary" />
             </button>
-            <p className="text-sm text-lamazi-muted">Lamazi · Hawally</p>
+            <p className="text-base text-lamazi-muted">Lamazi · Hawally</p>
           </div>
-          <a href="/" className="text-xs text-lamazi-primary hover:underline">View site →</a>
+          <a href="/" className="text-sm text-lamazi-primary hover:underline">View site →</a>
         </header>
         <main className="p-4 sm:p-8">
           <Outlet />

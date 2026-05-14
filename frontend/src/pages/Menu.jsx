@@ -3,11 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { api, apiError } from '@/lib/api';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import ItemDetailModal from '@/components/ItemDetailModal';
+import { useLang } from '@/contexts/LangContext';
 import { Search } from 'lucide-react';
 
 export default function Menu() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialCat = searchParams.get('category') || 'all';
+  const { L, t } = useLang();
 
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
@@ -43,6 +45,7 @@ export default function Menu() {
     const q = search.toLowerCase();
     return items.filter((i) =>
       (i.name_en || '').toLowerCase().includes(q)
+      || (i.name_ar || '').toLowerCase().includes(q)
       || (i.description_en || '').toLowerCase().includes(q),
     );
   }, [items, search]);
@@ -51,7 +54,7 @@ export default function Menu() {
     <div className="container-lamazi py-10" data-testid="menu-page">
       <div className="text-center mb-8">
         <p className="font-script text-3xl text-lamazi-secondary-deep -mb-1">Browse</p>
-        <h1 className="font-display text-4xl sm:text-5xl font-bold text-lamazi-primary">Our Menu</h1>
+        <h1 className="font-display text-4xl sm:text-5xl font-bold text-lamazi-primary">{t('our_menu')}</h1>
         <p className="section-subtitle mt-3">Every cake hand-crafted, every flavour rooted in tradition.</p>
       </div>
 
@@ -90,7 +93,7 @@ export default function Menu() {
                 : 'bg-white text-lamazi-primary border border-lamazi-secondary/60 hover:border-lamazi-primary'
             }`}
             data-testid={`menu-tab-${c.id}`}
-          >{c.name_en}</button>
+          >{L(c, 'name')}</button>
         ))}
       </div>
 

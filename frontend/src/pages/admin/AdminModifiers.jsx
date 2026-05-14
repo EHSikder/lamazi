@@ -29,8 +29,8 @@ export default function AdminModifiers() {
       <p className="text-sm text-lamazi-muted mb-6">Define add-on groups (like "Sauces") then the individual options inside each group.</p>
 
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setTab('groups')} className={`px-4 py-2 rounded-full text-xs font-medium ${tab === 'groups' ? 'bg-lamazi-primary text-lamazi-neutral' : 'bg-white border border-lamazi-secondary/60 text-lamazi-primary'}`}>Modifier Groups</button>
-        <button onClick={() => setTab('mods')} className={`px-4 py-2 rounded-full text-xs font-medium ${tab === 'mods' ? 'bg-lamazi-primary text-lamazi-neutral' : 'bg-white border border-lamazi-secondary/60 text-lamazi-primary'}`}>Options</button>
+        <button onClick={() => setTab('groups')} className={`px-4 py-2 rounded-full text-base font-semibold ${tab === 'groups' ? 'bg-lamazi-primary text-lamazi-neutral' : 'bg-white border border-lamazi-secondary/60 text-lamazi-primary'}`}>Modifier Groups</button>
+        <button onClick={() => setTab('mods')} className={`px-4 py-2 rounded-full text-base font-semibold ${tab === 'mods' ? 'bg-lamazi-primary text-lamazi-neutral' : 'bg-white border border-lamazi-secondary/60 text-lamazi-primary'}`}>Modifiers</button>
       </div>
 
       {tab === 'groups' && (

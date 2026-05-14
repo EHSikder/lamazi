@@ -5,9 +5,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api, apiError } from '@/lib/api';
 import { fmtKWD, getGuestId } from '@/lib/utils-app';
 import { toast } from 'sonner';
-import { MapContainer, TileLayer, Marker, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polygon, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { MapPin, Crosshair, Banknote, CreditCard, Bike, Store, AlertCircle, ArrowLeft } from 'lucide-react';
+import { MapPin, Crosshair, Banknote, CreditCard, Bike, Store, AlertCircle, ArrowLeft, AlertTriangle } from 'lucide-react';
 
 // fix default marker icons (Leaflet ships them via images CDN by default)
 const defaultIcon = new L.Icon({
@@ -26,6 +26,28 @@ function MapRecenter({ position }) {
     if (position) map.flyTo(position, 14, { duration: 0.6 });
   }, [position, map]);
   return null;
+}
+
+function MapClickHandler({ onPick }) {
+  useMapEvents({
+    click: (e) => onPick([e.latlng.lat, e.latlng.lng]),
+  });
+  return null;
+}
+
+// Nominatim reverse geocode → returns parsed Kuwait address parts
+async function reverseGeocode(lat, lng) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en&addressdetails=1`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('Geocoding service unavailable');
+  const data = await res.json();
+  const a = data?.address || {};
+  return {
+    area: a.city || a.town || a.suburb || a.village || a.neighbourhood || a.county || '',
+    block: a.suburb || a.neighbourhood || a.quarter || '',
+    street: a.road || a.pedestrian || '',
+    postcode: a.postcode || '',
+  };
 }
 
 // Ray casting point-in-polygon. Coords expected as [[lng,lat],...]
@@ -139,7 +161,7 @@ export default function Checkout() {
     const query = [addr.area, addr.block && `Block ${addr.block}`, addr.street && `Street ${addr.street}`, addr.building && `Building ${addr.building}`, 'Kuwait']
       .filter(Boolean).join(', ');
     if (!query.trim() || !addr.area) {
-      toast.error('Fill area at least, then try again');
+      toast.error('Fill at least Area, Block and Building, then try again');
       return;
     }
     try {
@@ -153,12 +175,35 @@ export default function Checkout() {
         setPinConfirmed(true);
         toast.success('Pin dropped on map');
       } else {
-        toast.error('Address not found — please use My Location');
+        toast.error('Could not locate address on map. Please refine your address or click directly on the map.');
       }
     } catch (e) {
-      toast.error('Geocoding failed — please use My Location');
+      toast.error('Geocoding failed — please click the map or use My Location');
     }
   }, [addr]);
+
+  // Debounce ref for map clicks (Nominatim rate limit: 1 req/sec)
+  const reverseGeoBusyRef = React.useRef(false);
+
+  const handleMapPick = useCallback(async (coords) => {
+    setPosition(coords);
+    setPinConfirmed(true);
+    if (reverseGeoBusyRef.current) return;
+    reverseGeoBusyRef.current = true;
+    setTimeout(() => { reverseGeoBusyRef.current = false; }, 1100);
+    try {
+      const parts = await reverseGeocode(coords[0], coords[1]);
+      setAddr((a) => ({
+        ...a,
+        area: parts.area || a.area,
+        block: parts.block || a.block,
+        street: parts.street || a.street,
+      }));
+      toast.success('Address auto-filled from map');
+    } catch {
+      toast.error('Could not look up address from map. You can type it manually.');
+    }
+  }, []);
 
   const useMyLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -166,10 +211,22 @@ export default function Checkout() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPosition([pos.coords.latitude, pos.coords.longitude]);
+      async (pos) => {
+        const coords = [pos.coords.latitude, pos.coords.longitude];
+        setPosition(coords);
         setPinConfirmed(true);
-        toast.success('Location captured');
+        try {
+          const parts = await reverseGeocode(coords[0], coords[1]);
+          setAddr((a) => ({
+            ...a,
+            area: parts.area || a.area,
+            block: parts.block || a.block,
+            street: parts.street || a.street,
+          }));
+          toast.success('Location captured & address auto-filled');
+        } catch {
+          toast.success('Location captured');
+        }
       },
       () => toast.error('Could not get location. Please allow access and try again.'),
       { enableHighAccuracy: true, timeout: 10000 },
@@ -244,7 +301,9 @@ export default function Checkout() {
       const { data } = await api.post('/orders', body);
       sessionStorage.removeItem('lamazi_checkout_state');
       if (data.requires_payment && data.payment_url) {
-        clear();
+        // Don't clear cart yet — user may need it if payment fails.
+        // Cart will be cleared on /payment-result when status == paid.
+        sessionStorage.setItem('lamazi_pending_order_id', data.id);
         window.location.href = data.payment_url;
         return;
       }
@@ -310,12 +369,13 @@ export default function Checkout() {
                 </button>
               </div>
 
-              <div className="rounded-2xl overflow-hidden h-[300px] border border-lamazi-secondary/40 mb-4">
-                <MapContainer center={position || KUWAIT_CENTRE} zoom={11} style={{ height: '100%', width: '100%' }}>
+              <div className="rounded-2xl overflow-hidden h-[320px] border border-lamazi-secondary/40 mb-4">
+                <MapContainer center={position || KUWAIT_CENTRE} zoom={11} style={{ height: '100%', width: '100%', cursor: 'crosshair' }}>
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution="&copy; OpenStreetMap"
                   />
+                  <MapClickHandler onPick={handleMapPick} />
                   {zones.map((z) => {
                     const ring = Array.isArray(z.coordinates) ? z.coordinates : (z.coordinates?.coordinates?.[0] || []);
                     if (!ring?.length) return null;
@@ -327,6 +387,21 @@ export default function Checkout() {
                   {position && <MapRecenter position={position} />}
                 </MapContainer>
               </div>
+
+              <p className="text-xs text-lamazi-muted mb-3 -mt-2">
+                Tip: tap or click anywhere on the map to drop a pin — we'll auto-fill the address fields.
+              </p>
+
+              {/* Delivery zone warning - prominent placement directly below map */}
+              {position && zones.length > 0 && !matchedZone && (
+                <div className="mb-4 p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 flex items-start gap-3" data-testid="zone-warning">
+                  <AlertTriangle className="w-6 h-6 text-rose-700 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-lg font-bold text-rose-800">Delivery not available in your area</p>
+                    <p className="text-sm text-rose-700 mt-0.5">Please pick a different location inside our delivery zones (shown in maroon on the map), or switch to Pickup.</p>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <Input label="Area*" value={addr.area} onChange={(v) => setAddr((a) => ({ ...a, area: v }))} testid="addr-area" />
@@ -344,20 +419,21 @@ export default function Checkout() {
                 <button onClick={detectMap} className="btn-outline flex-1 py-2.5 text-sm" data-testid="checkout-detect-map">
                   <MapPin className="w-4 h-4" /> Detect on Map
                 </button>
-                {pinConfirmed && (
-                  <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 rounded-full px-4 py-2">
+                {pinConfirmed ? (
+                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-full px-4 py-2 border border-emerald-200">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" /> Location confirmed
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-amber-800 bg-amber-50 rounded-full px-4 py-2 border border-amber-200">
+                    <AlertCircle className="w-4 h-4" /> Drop a pin on the map to continue
                   </div>
                 )}
               </div>
 
               {position && matchedZone && (
-                <p className="mt-3 text-xs text-emerald-700">
+                <p className="mt-3 text-sm font-medium text-emerald-700">
                   Delivers to <span className="font-semibold">{matchedZone.zone_name}</span> · {fmtKWD(matchedZone.delivery_fee)} · ~{matchedZone.estimated_time_minutes} min
                 </p>
-              )}
-              {position && !matchedZone && zones.length > 0 && (
-                <p className="mt-3 text-xs text-rose-700">Delivery not available in your area</p>
               )}
             </div>
           )}
@@ -447,12 +523,26 @@ export default function Checkout() {
             </div>
             <button
               onClick={placeOrder}
-              disabled={submitting || !branchStatus.is_open}
+              disabled={
+                submitting
+                || !branchStatus.is_open
+                || (orderType === 'delivery' && (!pinConfirmed || !position || (zones.length > 0 && !matchedZone)))
+                || (settings.min_order_amount > 0 && subtotal < Number(settings.min_order_amount))
+              }
               className="btn-primary w-full mt-5"
               data-testid="checkout-place-order-btn"
             >
               {submitting ? 'Placing order…' : paymentMethod === 'tap' ? `Pay ${fmtKWD(total)}` : 'Place Order'}
             </button>
+            {orderType === 'delivery' && (!pinConfirmed || !position) && (
+              <p className="text-xs text-amber-700 text-center mt-2">⚠ Confirm a delivery location on the map first.</p>
+            )}
+            {orderType === 'delivery' && position && zones.length > 0 && !matchedZone && (
+              <p className="text-xs text-rose-700 text-center mt-2">⚠ Your area is outside our delivery zones.</p>
+            )}
+            {settings.min_order_amount > 0 && subtotal < Number(settings.min_order_amount) && (
+              <p className="text-xs text-rose-700 text-center mt-2">⚠ Minimum order is {fmtKWD(settings.min_order_amount)}.</p>
+            )}
           </div>
         </aside>
       </div>

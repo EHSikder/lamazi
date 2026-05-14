@@ -42,7 +42,7 @@ export default function Loyalty() {
       <div className="rounded-3xl bg-gradient-to-br from-lamazi-tertiary to-lamazi-primary text-lamazi-neutral p-8 sm:p-12 flex flex-col sm:flex-row items-center gap-6">
         <div className="flex-1">
           <p className="font-script text-3xl text-lamazi-secondary -mb-1">Welcome aboard</p>
-          <h2 className="font-display text-2xl sm:text-3xl font-bold">Join the LAMAZI Club</h2>
+          <h2 className="font-display text-2xl sm:text-3xl font-bold">Join the <span className="brand-wordmark-light text-2xl sm:text-3xl">LAMAZI</span> Club</h2>
           <p className="text-sm text-lamazi-neutral/80 mt-2 max-w-md">
             Create your account in seconds and start collecting points instantly.
           </p>

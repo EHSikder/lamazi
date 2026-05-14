@@ -794,6 +794,27 @@ async def customer_upsert(payload: ProfileUpsert):
     return await sb_insert('customers', data)
 
 
+@api.get('/customer/check-exists')
+async def customer_check_exists(email: Optional[str] = None, phone: Optional[str] = None):
+    """Scoped existence check before sign-up. Used by frontend to avoid orphan auth users."""
+    if not email and not phone:
+        return {'exists': False}
+    # Build OR filter
+    parts: List[str] = []
+    if email:
+        parts.append(f'email.eq.{email.lower().strip()}')
+    if phone:
+        parts.append(f'phone.eq.{phone.strip()}')
+    params = {
+        'tenant_id': f'eq.{TENANT_ID}',
+        'or': f'({",".join(parts)})',
+        'select': 'id,email,phone',
+        'limit': '1',
+    }
+    rows = await sb_select('customers', params=params)
+    return {'exists': bool(rows), 'match': rows[0] if rows else None}
+
+
 @api.get('/customer/{customer_id}')
 async def customer_get(customer_id: str):
     rows = await sb_select('customers', params={'id': f'eq.{customer_id}', 'select': '*'})
@@ -847,9 +868,15 @@ async def admin_orders(status: Optional[str] = None, limit: int = 200):
 
 @api.patch('/admin/orders/{order_id}/status')
 async def admin_update_order_status(order_id: str, payload: StatusUpdate):
-    valid = ['pending', 'accepted', 'rejected', 'preparing', 'packing', 'out_for_delivery', 'delivered', 'cancelled']
+    valid = ['pending', 'accepted', 'rejected', 'preparing', 'packing', 'ready', 'out_for_delivery', 'delivered', 'cancelled']
     if payload.status not in valid:
         raise HTTPException(status_code=400, detail='Invalid status')
+
+    # Fetch current order to detect transitions
+    rows_before = await sb_select('orders', params={'id': f'eq.{order_id}', 'select': '*'})
+    if not rows_before:
+        raise HTTPException(status_code=404, detail='Order not found')
+    prior = rows_before[0]
 
     update: Dict[str, Any] = {'status': payload.status, 'updated_at': kuwait_iso()}
     if payload.status == 'accepted':
@@ -859,32 +886,92 @@ async def admin_update_order_status(order_id: str, payload: StatusUpdate):
 
     await sb_update('orders', update, params={'id': f'eq.{order_id}'})
 
-    armada_info: Optional[Dict[str, Any]] = None
-    if payload.status == 'accepted' and armada_is_configured():
+    # Award loyalty points on first transition to delivered
+    if payload.status == 'delivered' and prior.get('status') != 'delivered':
         try:
-            rows = await sb_select('orders', params={'id': f'eq.{order_id}', 'select': '*'})
-            if rows and rows[0].get('order_type') == 'delivery':
-                o = rows[0]
-                notes = o.get('notes') or ''
-                if 'armada_code:' not in notes:
-                    o['payment_method'] = 'paid' if o.get('payment_status') == 'paid' else 'cash'
-                    try:
-                        res = await armada_create(o)
-                        code = res.get('code') or res.get('id')
-                        armada_info = {
-                            'armada_code': code,
-                            'tracking_url': (res.get('logistics') or {}).get('tracking_url'),
-                            'delivery_fee': res.get('delivery_fee'),
-                        }
-                        new_notes = (notes + f' | armada_code:{code}').strip(' |')
-                        await sb_update('orders', {'notes': new_notes}, params={'id': f'eq.{order_id}'})
-                    except Exception as ae:
-                        logger.error('armada dispatch failed: %s', ae)
-                        armada_info = {'error': str(ae)}
+            await _award_loyalty_points(prior)
         except Exception as e:
-            logger.error('armada accept hook err: %s', e)
+            logger.warning('loyalty award failed: %s', e)
 
-    return {'success': True, 'status': payload.status, 'armada': armada_info}
+    return {'success': True, 'status': payload.status}
+
+
+@api.post('/admin/orders/{order_id}/dispatch-driver')
+async def admin_dispatch_driver(order_id: str):
+    """Triggers Armada delivery dispatch for an accepted order. Idempotent."""
+    if not armada_is_configured():
+        raise HTTPException(status_code=400, detail='Armada is not configured')
+    rows = await sb_select('orders', params={'id': f'eq.{order_id}', 'select': '*'})
+    if not rows:
+        raise HTTPException(status_code=404, detail='Order not found')
+    o = rows[0]
+    if o.get('order_type') != 'delivery':
+        raise HTTPException(status_code=400, detail='Order is not a delivery order')
+    notes = o.get('notes') or ''
+    if 'armada_code:' in notes:
+        # already dispatched
+        return {'success': True, 'already_dispatched': True}
+    try:
+        o['payment_method'] = 'paid' if o.get('payment_status') == 'paid' else 'cash'
+        res = await armada_create(o)
+        code = res.get('code') or res.get('id')
+        new_notes = (notes + f' | armada_code:{code}').strip(' |')
+        await sb_update('orders', {'notes': new_notes, 'updated_at': kuwait_iso()},
+                        params={'id': f'eq.{order_id}'})
+        return {
+            'success': True,
+            'armada_code': code,
+            'tracking_url': (res.get('logistics') or {}).get('tracking_url'),
+            'delivery_fee': res.get('delivery_fee'),
+        }
+    except Exception as ae:
+        logger.error('armada dispatch failed: %s', ae)
+        raise HTTPException(status_code=500, detail=f'Armada dispatch failed: {ae}')
+
+
+async def _award_loyalty_points(order: Dict[str, Any]) -> None:
+    """Award loyalty points to the order's customer if eligible. Idempotent via loyalty_transactions check."""
+    customer_id = order.get('customer_id')
+    if not customer_id:
+        return
+    order_id = order.get('id')
+    # Guard against double-award
+    prior = await sb_select('loyalty_transactions', params={
+        'order_id': f'eq.{order_id}',
+        'points_earned': 'gt.0',
+        'select': 'id',
+        'limit': '1',
+    })
+    if prior:
+        return
+    # Load loyalty settings
+    ls_rows = await sb_select('loyalty_settings', params={'tenant_id': f'eq.{TENANT_ID}', 'select': '*'})
+    if not ls_rows or not ls_rows[0].get('enabled'):
+        return
+    ls = ls_rows[0]
+    subtotal = float(order.get('subtotal') or 0)
+    discount = float(order.get('discount_amount') or 0)
+    earn_basis = max(0.0, subtotal - discount)
+    min_amt = float(ls.get('min_order_amount') or 0)
+    if earn_basis < min_amt:
+        return
+    points = int(earn_basis * float(ls.get('points_per_kwd') or 0))
+    if points <= 0:
+        return
+    cust = await sb_select('customers', params={'id': f'eq.{customer_id}', 'select': 'loyalty_points'})
+    current = int(cust[0]['loyalty_points']) if cust else 0
+    new_balance = current + points
+    await sb_update('customers', {'loyalty_points': new_balance, 'updated_at': kuwait_iso()},
+                    params={'id': f'eq.{customer_id}'})
+    await sb_insert('loyalty_transactions', {
+        'customer_id': customer_id,
+        'order_id': order_id,
+        'points_earned': points,
+        'points_spent': 0,
+        'balance_after': new_balance,
+        'notes': f'Awarded on delivered for order {order.get("order_number", order_id)}',
+    })
+    logger.info('Awarded %s points to %s for order %s', points, customer_id, order_id)
 
 
 @api.post('/armada/webhook')
@@ -920,6 +1007,14 @@ async def armada_webhook(request: Request):
             if new_status == 'delivered':
                 patch['completed_at'] = kuwait_iso()
             await sb_update('orders', patch, params={'id': f'eq.{order["id"]}'})
+            # Award loyalty points if order is now delivered (and customer is linked)
+            if new_status == 'delivered':
+                try:
+                    full_rows = await sb_select('orders', params={'id': f'eq.{order["id"]}', 'select': '*'})
+                    if full_rows:
+                        await _award_loyalty_points(full_rows[0])
+                except Exception as ae:
+                    logger.warning('webhook loyalty award failed: %s', ae)
         return {'received': True}
     except Exception as e:
         logger.error('armada webhook err: %s', e)

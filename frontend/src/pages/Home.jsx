@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, apiError } from '@/lib/api';
 import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
 import ItemDetailModal from '@/components/ItemDetailModal';
+import { useLang } from '@/contexts/LangContext';
 import { ChevronRight, Sparkles, Heart, Award, Play } from 'lucide-react';
 
 // TODO: Replace with real YouTube video IDs if you want different videos.
@@ -88,12 +89,12 @@ export default function Home() {
               >
                 <div className="aspect-square bg-lamazi-secondary/30 overflow-hidden">
                   {c.image_url ? (
-                    <img src={c.image_url} alt={c.name_en} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={c.image_url} alt={L(c, 'name')} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   ) : (
                     <div className="w-full h-full" />
                   )}
                 </div>
-                <p className="py-3 text-center text-sm font-semibold text-lamazi-primary">{c.name_en}</p>
+                <p className="py-3 text-center text-sm font-semibold text-lamazi-primary">{L(c, 'name')}</p>
               </button>
             ) : (
               <div key={i} className="shrink-0 w-[140px] sm:w-[170px] rounded-2xl bg-lamazi-secondary/20 animate-pulse">
@@ -179,7 +180,7 @@ export default function Home() {
         <div className="rounded-3xl bg-gradient-to-br from-lamazi-tertiary to-lamazi-primary text-lamazi-neutral p-8 sm:p-12 flex flex-col sm:flex-row items-center gap-6">
           <div className="flex-1">
             <p className="font-script text-3xl text-lamazi-secondary -mb-1">Sweet rewards</p>
-            <h3 className="font-display text-2xl sm:text-3xl font-bold">Join the LAMAZI Club & earn points on every order</h3>
+            <h3 className="font-display text-2xl sm:text-3xl font-bold">Join the <span className="brand-wordmark-light text-2xl sm:text-3xl">LAMAZI</span> Club & earn points on every order</h3>
             <p className="text-sm text-lamazi-neutral/80 mt-2 max-w-lg">
               Every dinar spent earns you points to redeem on future cakes. Free to join, sweetly generous.
             </p>

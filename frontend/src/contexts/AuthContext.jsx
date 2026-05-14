@@ -41,17 +41,33 @@ export function AuthProvider({ children }) {
   }, [loadProfile]);
 
   const signUp = async ({ email, password, name, phone }) => {
+    // 1) Scoped existence check against customers table BEFORE creating an auth user
+    try {
+      const { data: existsRes } = await api.get('/customer/check-exists', {
+        params: { email: email.trim().toLowerCase(), phone: phone?.trim() || '' },
+      });
+      if (existsRes?.exists) {
+        throw new Error('An account with this email or phone already exists. Please sign in.');
+      }
+    } catch (e) {
+      // If the existence check itself fails (e.g. network), surface a clean message
+      if (e.message && e.message.startsWith('An account')) throw e;
+      // otherwise continue — Supabase Auth will catch true duplicates as a fallback
+    }
+
+    // 2) Create Supabase Auth user
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim().toLowerCase(),
       password,
       options: { data: { name, phone } },
     });
     if (error) throw new Error(error.message);
-    // create/update customers row
+
+    // 3) Immediately upsert the customers row (id = auth user id, scoped by tenant)
     try {
       await api.post('/customer/upsert', {
         id: data.user?.id,
-        email,
+        email: email.trim().toLowerCase(),
         phone,
         name,
       });

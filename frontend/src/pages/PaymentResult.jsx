@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { useCart } from '@/contexts/CartContext';
 import { Loader2, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
 
 export default function PaymentResult() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { clear } = useCart();
   const [status, setStatus] = useState('verifying');  // verifying | success | failed
   const [data, setData] = useState({});
   const [attempts, setAttempts] = useState(0);
 
   useEffect(() => {
     const tapId = params.get('tap_id');
-    const orderId = params.get('order_id');
+    const orderId = params.get('order_id') || sessionStorage.getItem('lamazi_pending_order_id');
     if (!tapId && !orderId) {
       setStatus('failed');
       setData({ message: 'Invalid payment reference' });
@@ -27,17 +29,23 @@ export default function PaymentResult() {
         if (r.success && r.status === 'paid') {
           setStatus('success');
           setData(r);
+          // Payment confirmed → safe to clear cart and pending pointer
+          clear();
+          sessionStorage.removeItem('lamazi_pending_order_id');
         } else if (r.status === 'pending' && attempts < 5) {
           setTimeout(() => setAttempts((a) => a + 1), 2000);
         } else {
           setStatus('failed');
           setData({ message: r.message || 'Payment was not completed' });
+          // Keep cart intact so user can retry — only clear the pending order id
+          sessionStorage.removeItem('lamazi_pending_order_id');
         }
       })
       .catch(() => {
         setStatus('failed');
         setData({ message: 'Could not verify payment' });
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, attempts]);
 
   return (

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
 import { useCart } from '@/contexts/CartContext';
+import { useLang } from '@/contexts/LangContext';
 import { fmtKWD } from '@/lib/utils-app';
 import { toast } from 'sonner';
 
@@ -13,6 +14,7 @@ export default function ItemDetailModal({ open, itemId, onClose }) {
   const [notes, setNotes] = useState('');
   const [qty, setQty] = useState(1);
   const { addItem } = useCart();
+  const { L, t } = useLang();
 
   useEffect(() => {
     if (!open || !itemId) return;
@@ -159,9 +161,9 @@ export default function ItemDetailModal({ open, itemId, onClose }) {
           ) : data ? (
             <>
               <div>
-                <h3 className="font-display text-3xl text-lamazi-primary leading-tight">{data.name_en}</h3>
-                {data.description_en && (
-                  <p className="text-sm text-lamazi-muted mt-1 leading-relaxed">{data.description_en}</p>
+                <h3 className="font-display text-3xl text-lamazi-primary leading-tight">{L(data, 'name')}</h3>
+                {L(data, 'description') && (
+                  <p className="text-sm text-lamazi-muted mt-1 leading-relaxed">{L(data, 'description')}</p>
                 )}
                 <p className="mt-3 text-2xl font-semibold text-lamazi-primary">{fmtKWD(baseUnit)}</p>
               </div>
@@ -182,7 +184,7 @@ export default function ItemDetailModal({ open, itemId, onClose }) {
                         }`}
                         data-testid={`variant-${v.id}`}
                       >
-                        {v.name_en}
+                        {L(v, 'name')}
                         {v.price_adjustment ? ` (+${fmtKWD(v.price_adjustment)})` : ''}
                       </button>
                     ))}
@@ -194,7 +196,7 @@ export default function ItemDetailModal({ open, itemId, onClose }) {
               {(data.modifier_groups || []).map((g) => (
                 <div key={g.id}>
                   <p className="text-xs font-semibold uppercase tracking-wider text-lamazi-muted mb-2">
-                    {g.name_en} {g.required && <span className="text-lamazi-primary">*</span>}
+                    {L(g, 'name')} {g.required && <span className="text-lamazi-primary">*</span>}
                     {g.max_select > 1 && <span className="text-lamazi-muted/70 normal-case ml-1">(select up to {g.max_select})</span>}
                   </p>
                   <div className="space-y-2">
@@ -204,7 +206,7 @@ export default function ItemDetailModal({ open, itemId, onClose }) {
                       return (
                         <div key={m.id} className={`flex items-center justify-between rounded-xl border p-3 ${isSelected ? 'border-lamazi-primary bg-lamazi-secondary/30' : 'border-lamazi-secondary/40 bg-white'}`}>
                           <button onClick={() => toggleMod(g, m)} className="flex-1 text-left" data-testid={`modifier-${m.id}`}>
-                            <p className="text-sm font-medium text-lamazi-ink">{m.name_en}</p>
+                            <p className="text-sm font-medium text-lamazi-ink">{L(m, 'name')}</p>
                             <p className="text-xs text-lamazi-muted">{m.price > 0 ? `+ ${fmtKWD(m.price)}` : 'Included'}</p>
                           </button>
                           {isSelected && (
@@ -242,7 +244,7 @@ export default function ItemDetailModal({ open, itemId, onClose }) {
                   <button onClick={() => setQty((q) => q + 1)} className="p-1" data-testid="qty-plus"><Plus className="w-4 h-4 text-lamazi-primary" /></button>
                 </div>
                 <button onClick={handleAdd} className="btn-primary flex-1" data-testid="item-add-to-bag">
-                  Add to Bag — {fmtKWD(totalPrice)}
+                  {t('add_to_bag')} — {fmtKWD(totalPrice)}
                 </button>
               </div>
             </>

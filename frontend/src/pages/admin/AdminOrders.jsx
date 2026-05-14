@@ -2,23 +2,37 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { api, apiError } from '@/lib/api';
 import { supabase, TENANT_ID, BRANCH_ID } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Check, X, Eye, BellRing, Volume2, VolumeX } from 'lucide-react';
+import { Check, X, Eye, BellRing, Volume2, VolumeX, Phone, Package, CheckCircle2, Truck } from 'lucide-react';
 import { fmtKWD } from '@/lib/utils-app';
 
 const STATUS_BADGES = {
-  pending: 'bg-amber-100 text-amber-800',
-  accepted: 'bg-blue-100 text-blue-800',
-  preparing: 'bg-blue-100 text-blue-800',
-  packing: 'bg-blue-100 text-blue-800',
-  out_for_delivery: 'bg-violet-100 text-violet-800',
-  delivered: 'bg-emerald-100 text-emerald-800',
-  rejected: 'bg-rose-100 text-rose-800',
-  cancelled: 'bg-rose-100 text-rose-800',
+  pending: 'bg-amber-100 text-amber-900 border-amber-300',
+  accepted: 'bg-blue-100 text-blue-900 border-blue-300',
+  preparing: 'bg-blue-100 text-blue-900 border-blue-300',
+  packing: 'bg-blue-100 text-blue-900 border-blue-300',
+  ready: 'bg-violet-100 text-violet-900 border-violet-300',
+  out_for_delivery: 'bg-violet-100 text-violet-900 border-violet-300',
+  delivered: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+  rejected: 'bg-rose-100 text-rose-900 border-rose-300',
+  cancelled: 'bg-rose-100 text-rose-900 border-rose-300',
 };
+
+function hasArmadaCode(order) {
+  return Boolean(order?.notes && /armada_code:/.test(order.notes));
+}
+
+function getArmadaCode(order) {
+  const m = order?.notes && order.notes.match(/armada_code:([\w-]+)/);
+  return m ? m[1] : null;
+}
+
+function extractTxId(order) {
+  return order?.transaction_id || (order?.notes && (order.notes.match(/tap_id:([\w-]+)/) || [])[1]) || null;
+}
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('pending');
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
   const [hasNew, setHasNew] = useState(false);
@@ -26,7 +40,6 @@ export default function AdminOrders() {
   const audioCtxRef = useRef(null);
   const oscRef = useRef(null);
 
-  // load orders
   const load = useCallback(() => {
     setLoading(true);
     api.get('/admin/orders')
@@ -37,27 +50,16 @@ export default function AdminOrders() {
 
   useEffect(() => { load(); }, [load]);
 
-  // realtime: detect new orders
   useEffect(() => {
     const channel = supabase.channel('admin-orders')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'orders',
-        filter: `tenant_id=eq.${TENANT_ID}`,
-      }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `tenant_id=eq.${TENANT_ID}` }, (payload) => {
         const o = payload.new;
         if (o.branch_id !== BRANCH_ID) return;
-        if (o.payment_status === 'payment_pending') return;   // not yet paid
+        if (o.payment_status === 'payment_pending') return;
         setOrders((prev) => prev.some((p) => p.id === o.id) ? prev : [o, ...prev]);
         setHasNew(true);
       })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'orders',
-        filter: `tenant_id=eq.${TENANT_ID}`,
-      }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `tenant_id=eq.${TENANT_ID}` }, (payload) => {
         const o = payload.new;
         if (o.branch_id !== BRANCH_ID) return;
         setOrders((prev) => {
@@ -71,16 +73,14 @@ export default function AdminOrders() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // looping alert sound via Web Audio
   useEffect(() => {
-    if (!hasNew || !soundOn) {
-      stopBeep();
-      return;
-    }
+    const anyPending = orders.some((o) => o.status === 'pending');
+    if (!anyPending || !soundOn) { stopBeep(); return; }
+    if (!hasNew) return;
     startBeep();
     return stopBeep;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasNew, soundOn]);
+  }, [hasNew, soundOn, orders]);
 
   const startBeep = () => {
     try {
@@ -88,7 +88,6 @@ export default function AdminOrders() {
       const ctx = audioCtxRef.current;
       stopBeep();
       const intervalFn = () => {
-        if (!hasNew) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -102,53 +101,63 @@ export default function AdminOrders() {
       };
       intervalFn();
       oscRef.current = setInterval(intervalFn, 1500);
-    } catch (e) {
-      console.warn('audio error', e);
-    }
+    } catch { /* noop */ }
   };
 
   const stopBeep = () => {
-    if (oscRef.current) clearInterval(oscRef.current);
-    oscRef.current = null;
+    if (oscRef.current) { clearInterval(oscRef.current); oscRef.current = null; }
   };
 
-  const accept = async (o) => {
+  const setStatus = async (orderId, status) => {
     try {
-      const { data } = await api.patch(`/admin/orders/${o.id}/status`, { status: 'accepted' });
-      setHasNew(false);
-      toast.success('Order accepted' + (data?.armada?.armada_code ? ` · Armada ${data.armada.armada_code}` : ''));
+      await api.patch(`/admin/orders/${orderId}/status`, { status });
+      if (status === 'accepted' || status === 'rejected') setHasNew(false);
+      toast.success(`Order ${status}`);
       load();
-    } catch (e) {
-      toast.error(apiError(e));
-    }
+    } catch (e) { toast.error(apiError(e)); }
   };
 
   const reject = async (o) => {
-    if (!window.confirm(`Reject order #${o.order_number}?`)) return;
+    const reason = window.prompt(`Reject order #${o.order_number}? Optional reason:`);
+    if (reason === null) return;
     try {
-      await api.patch(`/admin/orders/${o.id}/status`, { status: 'rejected' });
+      await api.patch(`/admin/orders/${o.id}/status`, { status: 'rejected', notes: reason || null });
       setHasNew(false);
       toast.success('Order rejected');
       load();
-    } catch (e) {
-      toast.error(apiError(e));
-    }
+    } catch (e) { toast.error(apiError(e)); }
   };
 
-  const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter);
-  const pendingCount = orders.filter((o) => o.status === 'pending').length;
+  const callDriver = async (o) => {
+    try {
+      const { data } = await api.post(`/admin/orders/${o.id}/dispatch-driver`);
+      toast.success(data.already_dispatched ? 'Driver already called' : `Driver called — Armada ${data.armada_code}`);
+      load();
+    } catch (e) { toast.error(apiError(e)); }
+  };
+
+  const filtered = filter === 'all' ? orders : orders.filter((o) => {
+    if (filter === 'active') return ['accepted', 'preparing', 'packing', 'ready', 'out_for_delivery'].includes(o.status);
+    return o.status === filter;
+  });
+  const counts = {
+    pending: orders.filter((o) => o.status === 'pending').length,
+    active: orders.filter((o) => ['accepted', 'preparing', 'packing', 'ready', 'out_for_delivery'].includes(o.status)).length,
+    delivered: orders.filter((o) => o.status === 'delivered').length,
+    rejected: orders.filter((o) => ['rejected', 'cancelled'].includes(o.status)).length,
+  };
 
   return (
     <div data-testid="admin-orders">
       <div className="flex items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="font-display text-3xl text-lamazi-primary font-bold">Orders</h1>
-          <p className="text-sm text-lamazi-muted">Live feed from Supabase Realtime. New orders trigger an alert.</p>
+          <p className="text-base text-lamazi-muted">Live order feed. Pending orders trigger a looping alert.</p>
         </div>
         <div className="flex gap-2 items-center">
-          {hasNew && (
-            <button onClick={() => setHasNew(false)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500 text-white animate-pulse-ring text-sm">
-              <BellRing className="w-4 h-4" /> New order!
+          {hasNew && counts.pending > 0 && (
+            <button onClick={() => setHasNew(false)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500 text-white animate-pulse-ring text-base font-semibold">
+              <BellRing className="w-4 h-4" /> {counts.pending} new!
             </button>
           )}
           <button onClick={() => setSoundOn((s) => !s)} className="p-2 rounded-full bg-white border border-lamazi-secondary/60" title={soundOn ? 'Mute alerts' : 'Enable alerts'} data-testid="admin-orders-sound-toggle">
@@ -157,20 +166,18 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
         {[
+          { v: 'pending', label: `Pending (${counts.pending})` },
+          { v: 'active', label: `In progress (${counts.active})` },
+          { v: 'delivered', label: `Delivered (${counts.delivered})` },
+          { v: 'rejected', label: `Rejected (${counts.rejected})` },
           { v: 'all', label: `All (${orders.length})` },
-          { v: 'pending', label: `Pending (${pendingCount})` },
-          { v: 'accepted', label: 'Accepted' },
-          { v: 'preparing', label: 'Preparing' },
-          { v: 'out_for_delivery', label: 'Out for delivery' },
-          { v: 'delivered', label: 'Delivered' },
-          { v: 'rejected', label: 'Rejected' },
         ].map((f) => (
           <button
             key={f.v}
             onClick={() => setFilter(f.v)}
-            className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
+            className={`shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
               filter === f.v ? 'bg-lamazi-primary text-lamazi-neutral' : 'bg-white border border-lamazi-secondary/60 text-lamazi-primary'
             }`}
             data-testid={`admin-orders-filter-${f.v}`}
@@ -179,133 +186,260 @@ export default function AdminOrders() {
       </div>
 
       {loading ? <p className="text-lamazi-muted">Loading…</p> : filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-lamazi-secondary/40 p-12 text-center text-lamazi-muted">No orders yet.</div>
+        <div className="bg-white rounded-2xl border border-lamazi-secondary/40 p-12 text-center text-lamazi-muted text-base">No orders in this view.</div>
       ) : (
-        <div className="bg-white rounded-2xl border border-lamazi-secondary/40 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-lamazi-secondary/30 text-xs uppercase tracking-widest text-lamazi-muted">
-              <tr>
-                <th className="text-left px-4 py-3">Order #</th>
-                <th className="text-left px-4 py-3 hidden md:table-cell">Customer</th>
-                <th className="text-left px-4 py-3 hidden sm:table-cell">Time</th>
-                <th className="text-left px-4 py-3">Type</th>
-                <th className="text-left px-4 py-3">Status</th>
-                <th className="text-right px-4 py-3">Total</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-lamazi-secondary/40">
-              {filtered.map((o) => (
-                <tr key={o.id} className="hover:bg-lamazi-secondary/10" data-testid={`order-row-${o.id}`}>
-                  <td className="px-4 py-3 font-medium text-lamazi-primary">#{o.order_number || o.id.slice(0, 8)}</td>
-                  <td className="px-4 py-3 hidden md:table-cell">{o.customer_name}<br /><span className="text-xs text-lamazi-muted">{o.customer_phone}</span></td>
-                  <td className="px-4 py-3 text-lamazi-muted hidden sm:table-cell">{new Date(o.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-xs capitalize">{o.order_type}</td>
-                  <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_BADGES[o.status] || 'bg-gray-100 text-gray-700'}`}>{o.status}</span></td>
-                  <td className="px-4 py-3 text-right font-semibold">{fmtKWD(o.total_amount)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1.5">
-                      {o.status === 'pending' && (
-                        <>
-                          <button onClick={() => accept(o)} className="p-1.5 rounded-full bg-emerald-100 hover:bg-emerald-200" title="Accept" data-testid={`accept-${o.id}`}>
-                            <Check className="w-4 h-4 text-emerald-700" />
-                          </button>
-                          <button onClick={() => reject(o)} className="p-1.5 rounded-full bg-rose-100 hover:bg-rose-200" title="Reject" data-testid={`reject-${o.id}`}>
-                            <X className="w-4 h-4 text-rose-700" />
-                          </button>
-                        </>
-                      )}
-                      <button onClick={() => setOpenId(o.id)} className="p-1.5 rounded-full bg-lamazi-secondary/30 hover:bg-lamazi-secondary/60" title="Details">
-                        <Eye className="w-4 h-4 text-lamazi-primary" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((o) => (
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAccept={() => setStatus(o.id, 'accepted')}
+              onReject={() => reject(o)}
+              onMarkReady={() => setStatus(o.id, 'ready')}
+              onDelivered={() => setStatus(o.id, 'delivered')}
+              onCallDriver={() => callDriver(o)}
+              onView={() => setOpenId(o.id)}
+            />
+          ))}
         </div>
       )}
 
-      {openId && <OrderDetailDrawer id={openId} onClose={() => setOpenId(null)} onChanged={load} />}
+      {openId && <OrderDetailModal id={openId} onClose={() => setOpenId(null)} onChanged={load} />}
     </div>
   );
 }
 
-function OrderDetailDrawer({ id, onClose, onChanged }) {
+function OrderCard({ order, onAccept, onReject, onMarkReady, onDelivered, onCallDriver, onView }) {
+  const isOnline = order.payment_status === 'paid' || extractTxId(order);
+  const txId = extractTxId(order);
+  const armadaCalled = hasArmadaCode(order);
+  const armadaCode = getArmadaCode(order);
+  const isDelivery = order.order_type === 'delivery';
+
+  return (
+    <div className="bg-white rounded-2xl border-2 border-lamazi-secondary/40 p-5 hover:border-lamazi-primary/40 transition-colors shadow-sm" data-testid={`order-card-${order.id}`}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <p className="font-display text-xl font-bold text-lamazi-primary leading-tight">#{order.order_number || order.id.slice(0, 8)}</p>
+          <p className="text-base font-medium text-lamazi-ink">{order.customer_name}</p>
+          <p className="text-sm text-lamazi-muted">{order.customer_phone}</p>
+        </div>
+        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${STATUS_BADGES[order.status] || 'bg-gray-100 text-gray-800'}`}>
+          {order.status}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isOnline ? 'bg-blue-100 text-blue-900' : 'bg-emerald-100 text-emerald-900'}`}>
+          {isOnline ? 'Online' : 'COD'}
+        </span>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDelivery ? 'bg-violet-100 text-violet-900' : 'bg-amber-100 text-amber-900'}`}>
+          {isDelivery ? 'Delivery' : 'Pickup'}
+        </span>
+        <span className="text-xs text-lamazi-muted">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+
+      {isOnline && txId && (
+        <p className="text-xs text-lamazi-muted mb-3 font-mono break-all">Tx: {txId}</p>
+      )}
+      {armadaCalled && armadaCode && (
+        <p className="text-xs text-lamazi-muted mb-3 font-mono break-all">Armada: {armadaCode}</p>
+      )}
+
+      <p className="text-2xl font-display font-bold text-lamazi-primary mb-4">{fmtKWD(order.total_amount)}</p>
+
+      {/* Action buttons by status */}
+      <div className="flex flex-wrap gap-2">
+        <button onClick={onView} className="flex-1 min-w-0 py-2 px-3 rounded-full bg-lamazi-secondary/30 hover:bg-lamazi-secondary/60 text-sm font-semibold text-lamazi-primary inline-flex items-center justify-center gap-1.5" data-testid={`view-${order.id}`}>
+          <Eye className="w-3.5 h-3.5" /> View
+        </button>
+
+        {order.status === 'pending' && (
+          <>
+            <button onClick={onAccept} className="flex-1 py-2 px-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5" data-testid={`accept-${order.id}`}>
+              <Check className="w-4 h-4" /> Accept
+            </button>
+            <button onClick={onReject} className="flex-1 py-2 px-3 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5" data-testid={`reject-${order.id}`}>
+              <X className="w-4 h-4" /> Reject
+            </button>
+          </>
+        )}
+
+        {(order.status === 'accepted' || order.status === 'preparing') && (
+          <>
+            {isDelivery && (
+              armadaCalled ? (
+                <button disabled className="flex-1 py-2 px-3 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-not-allowed" data-testid={`driver-called-${order.id}`}>
+                  <CheckCircle2 className="w-4 h-4" /> Driver Called
+                </button>
+              ) : (
+                <button onClick={onCallDriver} className="flex-1 py-2 px-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5" data-testid={`call-driver-${order.id}`}>
+                  <Phone className="w-4 h-4" /> Call Driver
+                </button>
+              )
+            )}
+            <button onClick={onMarkReady} className="flex-1 py-2 px-3 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5" data-testid={`mark-ready-${order.id}`}>
+              <Package className="w-4 h-4" /> Mark Ready
+            </button>
+          </>
+        )}
+
+        {(order.status === 'ready' || order.status === 'packing' || order.status === 'out_for_delivery') && (
+          <>
+            {isDelivery && armadaCalled && (
+              <button disabled className="flex-1 py-2 px-3 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-not-allowed">
+                <CheckCircle2 className="w-4 h-4" /> Driver Called
+              </button>
+            )}
+            {isDelivery && !armadaCalled && (
+              <button onClick={onCallDriver} className="flex-1 py-2 px-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5">
+                <Phone className="w-4 h-4" /> Call Driver
+              </button>
+            )}
+            <button onClick={onDelivered} className="flex-1 py-2 px-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5" data-testid={`delivered-${order.id}`}>
+              <Truck className="w-4 h-4" /> Delivered
+            </button>
+          </>
+        )}
+
+        {order.status === 'delivered' && (
+          <span className="flex-1 py-2 px-3 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold inline-flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" /> Delivered
+          </span>
+        )}
+        {(order.status === 'rejected' || order.status === 'cancelled') && (
+          <span className="flex-1 py-2 px-3 rounded-full bg-rose-100 text-rose-800 text-sm font-semibold inline-flex items-center justify-center gap-1.5">
+            <X className="w-4 h-4" /> {order.status}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrderDetailModal({ id, onClose, onChanged }) {
   const [order, setOrder] = useState(null);
 
   useEffect(() => {
     api.get(`/orders/${id}`).then(({ data }) => setOrder(data));
   }, [id]);
 
-  const setStatus = async (s) => {
-    try {
-      await api.patch(`/admin/orders/${id}/status`, { status: s });
-      toast.success('Status updated');
-      onChanged?.();
-      const { data } = await api.get(`/orders/${id}`);
-      setOrder(data);
-    } catch (e) {
-      toast.error(apiError(e));
-    }
-  };
-
   if (!order) return null;
-  const nextStatuses = ['accepted', 'preparing', 'packing', 'out_for_delivery', 'delivered', 'rejected'];
+  const isOnline = order.payment_status === 'paid' || extractTxId(order);
+  const txId = extractTxId(order);
+  const armadaCode = getArmadaCode(order);
+  const addr = order.delivery_address;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-      <div className="bg-lamazi-neutral w-full max-w-md h-full overflow-y-auto shadow-2xl">
-        <div className="p-5 border-b border-lamazi-secondary/40 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-lamazi-neutral rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5 border-b border-lamazi-secondary/40 flex items-center justify-between sticky top-0 bg-lamazi-neutral z-10">
           <div>
-            <h3 className="font-display text-xl text-lamazi-primary">#{order.order_number}</h3>
-            <p className="text-xs text-lamazi-muted">{new Date(order.created_at).toLocaleString()}</p>
+            <p className="font-display text-2xl font-bold text-lamazi-primary">#{order.order_number}</p>
+            <p className="text-sm text-lamazi-muted">{new Date(order.created_at).toLocaleString()}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-lamazi-secondary/40"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-lamazi-secondary/40 rounded-full" data-testid="order-modal-close"><X className="w-5 h-5" /></button>
         </div>
-        <div className="p-5 space-y-4 text-sm">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-lamazi-muted">Customer</p>
-            <p className="font-medium">{order.customer_name}</p>
-            <p className="text-lamazi-muted">{order.customer_phone}</p>
-            {order.customer_email && <p className="text-lamazi-muted text-xs">{order.customer_email}</p>}
-          </div>
-          {order.delivery_address && (
-            <div>
-              <p className="text-xs uppercase tracking-widest text-lamazi-muted">Address</p>
-              <p className="text-xs">{Object.entries(order.delivery_address).filter(([k, v]) => v && !['geo_lat', 'geo_lng'].includes(k)).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
-            </div>
+
+        <div className="p-6 space-y-6">
+          {/* Customer */}
+          <section>
+            <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Customer</p>
+            <p className="text-base font-semibold">{order.customer_name}</p>
+            <p className="text-sm text-lamazi-muted">{order.customer_phone}</p>
+            {order.customer_email && <p className="text-sm text-lamazi-muted">{order.customer_email}</p>}
+          </section>
+
+          {/* Address */}
+          {addr && (
+            <section>
+              <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Delivery address</p>
+              <p className="text-base leading-relaxed">
+                {[addr.area, addr.block && `Block ${addr.block}`, addr.street && `Street ${addr.street}`, addr.building && `Bldg ${addr.building}`, addr.floor && `Floor ${addr.floor}`, addr.apartment && `Apt ${addr.apartment}`].filter(Boolean).join(' · ')}
+              </p>
+              {addr.additional_directions && <p className="text-sm italic text-lamazi-muted mt-1">"{addr.additional_directions}"</p>}
+              {addr.geo_lat && addr.geo_lng && (
+                <a href={`https://www.google.com/maps/?q=${addr.geo_lat},${addr.geo_lng}`} target="_blank" rel="noopener noreferrer" className="text-sm text-lamazi-primary hover:underline">Open in Google Maps →</a>
+              )}
+            </section>
           )}
-          <div>
-            <p className="text-xs uppercase tracking-widest text-lamazi-muted">Items</p>
+
+          {/* Items */}
+          <section>
+            <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Items</p>
             <div className="divide-y divide-lamazi-secondary/40">
               {(order.items || []).map((it) => (
-                <div key={it.id} className="py-2">
-                  <p className="font-medium">{it.quantity} × {it.item_name_en}</p>
-                  {(it.modifiers || []).length > 0 && <p className="text-xs text-lamazi-muted">+ {it.modifiers.map((m) => m.modifier_name_en).join(', ')}</p>}
-                  {it.notes && <p className="text-xs italic text-lamazi-muted">"{it.notes}"</p>}
+                <div key={it.id} className="py-3 flex justify-between gap-2">
+                  <div>
+                    <p className="text-base font-semibold">{it.quantity} × {it.item_name_en}</p>
+                    {it.variant_name_en && <p className="text-sm text-lamazi-muted">{it.variant_name_en}</p>}
+                    {(it.modifiers || []).length > 0 && (
+                      <p className="text-sm text-lamazi-muted">+ {it.modifiers.map((m) => `${m.modifier_name_en}${m.quantity > 1 ? ` ×${m.quantity}` : ''}`).join(', ')}</p>
+                    )}
+                    {it.notes && <p className="text-sm italic text-lamazi-muted">"{it.notes}"</p>}
+                  </div>
+                  <p className="text-base font-semibold text-lamazi-primary shrink-0">{fmtKWD(it.total_price)}</p>
                 </div>
               ))}
             </div>
-          </div>
-          <div className="border-t border-lamazi-secondary/40 pt-3 space-y-1">
-            <div className="flex justify-between"><span className="text-lamazi-muted">Subtotal</span><span>{fmtKWD(order.subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-lamazi-muted">Delivery</span><span>{fmtKWD(order.delivery_fee)}</span></div>
-            <div className="flex justify-between"><span className="text-lamazi-muted">Discount</span><span>{fmtKWD(order.discount_amount)}</span></div>
-            <div className="flex justify-between font-semibold text-base"><span>Total</span><span className="text-lamazi-primary">{fmtKWD(order.total_amount)}</span></div>
-            <p className="text-xs text-lamazi-muted">Payment: {order.payment_status}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Update status</p>
-            <div className="flex flex-wrap gap-2">
-              {nextStatuses.map((s) => (
-                <button key={s} onClick={() => setStatus(s)} className="px-3 py-1.5 rounded-full text-xs bg-white border border-lamazi-secondary/60 hover:border-lamazi-primary">{s}</button>
-              ))}
+          </section>
+
+          {/* Totals */}
+          <section className="border-t border-lamazi-secondary/40 pt-3 space-y-1.5 text-base">
+            <Row label="Subtotal" value={fmtKWD(order.subtotal)} />
+            <Row label="Discount" value={fmtKWD(order.discount_amount)} />
+            <Row label="Delivery fee" value={fmtKWD(order.delivery_fee)} />
+            <div className="flex justify-between text-xl font-display font-bold text-lamazi-primary pt-2 border-t border-lamazi-secondary/40">
+              <span>Total</span><span>{fmtKWD(order.total_amount)}</span>
             </div>
-          </div>
+          </section>
+
+          {/* Payment + Armada */}
+          <section className="text-base">
+            <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Payment</p>
+            <p>{isOnline ? 'Online (Tap Payments)' : 'Cash on Delivery'} · <span className="text-emerald-700 font-medium">{order.payment_status}</span></p>
+            {txId && <p className="text-sm font-mono text-lamazi-muted break-all">Transaction: {txId}</p>}
+            {armadaCode && <p className="text-sm font-mono text-lamazi-muted break-all">Armada code: {armadaCode}</p>}
+          </section>
+
+          {/* Notes */}
+          {order.notes && (
+            <section>
+              <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Order notes</p>
+              <p className="text-sm italic">"{order.notes}"</p>
+            </section>
+          )}
+
+          {/* Status timeline */}
+          <section>
+            <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Status history</p>
+            <div className="flex flex-wrap gap-2">
+              {['pending', 'accepted', 'ready', 'delivered'].map((s) => {
+                const order_status = order.status;
+                const stages = ['pending', 'accepted', 'ready', 'delivered'];
+                const passed = stages.indexOf(order_status) >= stages.indexOf(s) || (order_status === 'out_for_delivery' && s !== 'delivered');
+                return (
+                  <span key={s} className={`text-xs px-3 py-1 rounded-full font-semibold ${passed ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
+                    {s}
+                  </span>
+                );
+              })}
+              {(order.status === 'rejected' || order.status === 'cancelled') && (
+                <span className="text-xs px-3 py-1 rounded-full font-semibold bg-rose-100 text-rose-800">{order.status}</span>
+              )}
+            </div>
+          </section>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-lamazi-muted">{label}</span>
+      <span className="text-lamazi-ink/90 font-medium">{value}</span>
     </div>
   );
 }
