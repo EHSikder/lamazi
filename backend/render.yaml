@@ -5,10 +5,12 @@ services:
     region: frankfurt
     plan: free
     rootDir: backend
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
     startCommand: "uvicorn server:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /api/health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.10"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
@@ -26,7 +28,7 @@ services:
       - key: TAP_MERCHANT_ID
         sync: false
       - key: ARMADA_BASE_URL
-        sync: false
+        value: "https://api.armadadelivery.com/v2"
       - key: ARMADA_API_KEY
         sync: false
       - key: ARMADA_API_SECRET
