@@ -161,18 +161,30 @@ Without this, new orders won't trigger the alert sound in the admin panel and cu
 
 ---
 
-## 5 · Register the webhooks
+## 5 · Webhook setup
 
-Webhooks are how Tap and Armada notify your backend that something happened (payment captured, driver delivered, etc.).
+### Tap Payments — automatic (no dashboard config required)
 
-### Tap Payments
+Tap does **not** allow you to register a fixed webhook URL in their dashboard.
+Instead, the webhook URL is sent with every charge request in the `post.url`
+field. Our backend handles this automatically — it sends:
 
-1. Log in to https://www.tap.company/ → Dashboard.
-2. Find **Webhooks** (sometimes under Developers → Webhooks).
-3. Add a new endpoint:
-   - URL: `https://lamazi-api.onrender.com/api/tap/webhook`
-   - Events: `charge.captured`, `charge.failed`
-4. Save.
+```json
+"post": { "url": "<BACKEND_PUBLIC_URL>/api/tap/webhook" }
+"redirect": { "url": "<FRONTEND_URL>/payment-result?order_id=..." }
+```
+
+For this to work, set the following env vars in Render:
+
+| Variable | Value |
+|---|---|
+| `FRONTEND_URL` | Your Vercel URL, e.g. `https://lamazi-sweets.vercel.app` |
+| `BACKEND_PUBLIC_URL` | Your Render URL, e.g. `https://lamazi-api.onrender.com` (optional — falls back to FRONTEND_URL if same host) |
+
+Reference: https://developers.tap.company/docs/webhook
+
+After redeploying with these set, every Tap charge will automatically register
+its own webhook + redirect. No further dashboard configuration needed.
 
 ### Armada Deliveries
 

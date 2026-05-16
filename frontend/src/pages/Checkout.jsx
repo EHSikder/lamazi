@@ -86,7 +86,7 @@ function normaliseRingToLngLat(ring) {
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const { items, subtotal, clear } = useCart();
+  const { items, subtotal, clear, hydrated } = useCart();
   const { user, profile, refreshProfile } = useAuth();
 
   const [orderType, setOrderType] = useState('delivery');
@@ -114,8 +114,9 @@ export default function Checkout() {
 
   useEffect(() => {
     if (placing) return;
+    if (!hydrated) return;  // wait for cart to load from localStorage before redirecting
     if (items.length === 0) navigate('/bag');
-  }, [items, navigate, placing]);
+  }, [items, navigate, placing, hydrated]);
 
   useEffect(() => {
     api.get('/settings').then(({ data }) => {

@@ -75,13 +75,20 @@ LAMAZI Sweets is a production-grade e-commerce web application for a cake and sw
 - ✅ **Home page crash fixed**: `Home.jsx` was using `L(c, 'name')` inside category map but missing `const { L } = useLang()` destructure. Added — Error Boundary no longer triggers. Verified via screenshot.
 - ✅ **Webhook GETs**: `/api/tap/webhook` and `/api/armada/webhook` confirmed returning 200 JSON with friendly status message (no more 405s in browser).
 - ✅ **Payment tagging verified**: backend `_save_order` writes `payment_method:tap` (or `cash`) + `transaction_id`; `AdminOrders.jsx` parses notes regex to flag "Online" vs "COD".
+- ✅ **Tap webhook now registered per-charge via API** (`post.url` in charge body) — Tap does not support dashboard webhook config. Added `webhook_url` arg to `tap.create_charge`, `BACKEND_PUBLIC_URL` env var, and stronger idempotent handler that finalises orders on `CAPTURED` and removes them on `CANCELLED/FAILED/VOID/TIMEDOUT/ABANDONED`. Fixes "online orders don't appear in admin" bug.
+- ✅ **Switched Tap to TEST keys** (`sk_test_…`, `pk_test_…`) per user request — no more real-money authorisations during dev.
+- ✅ **FRONTEND_URL refreshed** to current preview (was stuck on stale `6b04f1d2-…` URL → Tap redirect was 404). Production deploy must re-set this to the Vercel domain.
+- ✅ **Checkout: zone validation fully working**: `normaliseRingToLngLat` helper added (was referenced but undefined → broke point-in-polygon check). Auto-detects [lat,lng] vs [lng,lat] storage. Verified 7 zone polygons render on map and pinpoint correctly flags "outside delivery zone".
+- ✅ **Checkout cart-hydration race fixed**: was redirecting to /bag on refresh because items=[] before localStorage loaded. Exposed `hydrated` flag from CartContext and waited for it.
+- ✅ **Customer 404 spam silenced**: `/api/customer/{id}` now returns null with 200 instead of 404 for users without a `customers` row.
 
 ## Next tasks
 1. After GitHub push, deploy to Render and Vercel per DEPLOYMENT.md (now beginner-friendly with troubleshooting).
-2. Once live, register Tap + Armada webhooks against the Render URL.
-3. Insert the admin row in `public.users` (Supabase dashboard).
-4. Enable Realtime on the `orders` table (Database → Replication).
-5. (Deferred from this session by user) Verify audio alert loops on new pending orders in `/admin/orders`.
+2. In Render, set `FRONTEND_URL` to the Vercel URL and `BACKEND_PUBLIC_URL` to the Render URL. No Tap dashboard webhook setup required — it's registered per-charge automatically.
+3. Register Armada webhook against the Render URL.
+4. Insert the admin row in `public.users` (Supabase dashboard).
+5. Enable Realtime on the `orders` table (Database → Replication).
+6. (Deferred from this session by user) Verify audio alert loops on new pending orders in `/admin/orders`.
 
 ## Known constraints / behaviours
 - Live Tap & Armada keys are in use. Test charges may produce real authorisations — rotate keys after demo.

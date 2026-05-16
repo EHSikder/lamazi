@@ -32,6 +32,9 @@ from tap import create_charge as tap_create_charge, get_charge as tap_get_charge
 TENANT_ID = os.environ['TENANT_ID']
 BRANCH_ID = os.environ['BRANCH_ID']
 FRONTEND_URL = os.environ.get('FRONTEND_URL', '')
+# Public URL where /api/tap/webhook is reachable from the internet. Defaults to
+# FRONTEND_URL because in our preview deployment the same host serves both / and /api.
+BACKEND_PUBLIC_URL = os.environ.get('BACKEND_PUBLIC_URL', '') or FRONTEND_URL
 TAP_PUBLIC_KEY = os.environ.get('TAP_PUBLIC_KEY', '')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -665,11 +668,13 @@ async def create_order(req: CreateOrderRequest):
     # Online: save with payment_pending so it doesn't show in admin yet
     result = await _save_order(req, payment_status='payment_pending')
     redirect_url = f"{FRONTEND_URL}/payment-result?order_id={result['id']}"
+    webhook_url = f"{BACKEND_PUBLIC_URL}/api/tap/webhook" if BACKEND_PUBLIC_URL else None
     charge = await tap_create_charge(
         order_id=result['id'], order_number=result['order_number'],
         amount=req.total_amount,
         customer_name=req.customer_name, customer_email=req.customer_email or '',
         customer_phone=req.customer_phone, redirect_url=redirect_url,
+        webhook_url=webhook_url,
     )
     if charge['status'] != 200:
         # rollback
@@ -742,20 +747,40 @@ async def payment_verify(tap_id: Optional[str] = None, order_id: Optional[str] =
 
 @api.post('/tap/webhook')
 async def tap_webhook(request: Request):
-    """Backup path if redirect verification fails."""
+    """Server-to-server callback from Tap. Idempotent — finalises the order
+    when the redirect path fails (e.g. user closes the browser)."""
     try:
         data = await request.json()
         charge_id = data.get('id')
         status = str(data.get('status', '')).upper()
         ref_order_id = (data.get('metadata') or {}).get('order_id') or (data.get('reference') or {}).get('transaction')
         logger.info('Tap webhook: %s status=%s order=%s', charge_id, status, ref_order_id)
-        if status == 'CAPTURED' and ref_order_id:
-            rows = await sb_select('orders', params={'id': f'eq.{ref_order_id}', 'select': 'payment_status'})
+        if not ref_order_id:
+            return {'received': True}
+        if status == 'CAPTURED':
+            rows = await sb_select('orders', params={'id': f'eq.{ref_order_id}', 'select': 'payment_status,order_number'})
             if rows and rows[0].get('payment_status') != 'paid':
                 await sb_update('orders', {
                     'payment_status': 'paid', 'status': 'pending', 'transaction_id': charge_id,
                     'updated_at': kuwait_iso(),
                 }, params={'id': f'eq.{ref_order_id}'})
+                try:
+                    await sb_insert('payments', {
+                        'order_id': ref_order_id, 'payment_method': 'online', 'provider': 'tap',
+                        'amount': float(data.get('amount') or 0), 'currency': 'KWD',
+                        'status': 'completed', 'transaction_id': charge_id,
+                        'provider_response': data, 'completed_at': kuwait_iso(),
+                    })
+                except Exception as e:
+                    logger.warning('webhook payment record write failed: %s', e)
+        elif status in ('CANCELLED', 'FAILED', 'DECLINED', 'RESTRICTED', 'VOID', 'TIMEDOUT', 'ABANDONED'):
+            # Remove unpaid pending order so the customer can retry cleanly.
+            try:
+                rows = await sb_select('orders', params={'id': f'eq.{ref_order_id}', 'select': 'payment_status'})
+                if rows and rows[0].get('payment_status') != 'paid':
+                    await sb_delete('orders', params={'id': f'eq.{ref_order_id}'})
+            except Exception as e:
+                logger.warning('webhook cleanup failed: %s', e)
         return {'received': True}
     except Exception as e:
         logger.error('webhook err: %s', e)

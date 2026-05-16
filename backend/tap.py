@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import httpx
 
@@ -28,6 +28,7 @@ async def create_charge(
     customer_email: str,
     customer_phone: str,
     redirect_url: str,
+    webhook_url: Optional[str] = None,
     description: str = '',
 ) -> Dict[str, Any]:
     first = (customer_name or 'Customer').split()[0]
@@ -49,10 +50,16 @@ async def create_charge(
             'email': customer_email or 'customer@lamazi.com',
             'phone': {'country_code': '965', 'number': phone_digits},
         },
-        'merchant': {'id': TAP_MERCHANT_ID},
         'source': {'id': 'src_all'},
         'redirect': {'url': redirect_url},
     }
+    # Tap requires `post.url` in the charge body to register a webhook
+    # (Tap does NOT support webhook URLs in dashboard — they are per-charge).
+    # See https://developers.tap.company/docs/webhook
+    if webhook_url:
+        body['post'] = {'url': webhook_url}
+    if TAP_MERCHANT_ID:
+        body['merchant'] = {'id': TAP_MERCHANT_ID}
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(f'{TAP_API_BASE}/charges', headers=_headers(), json=body)
         return {'status': resp.status_code, 'data': resp.json() if resp.text else {}}
