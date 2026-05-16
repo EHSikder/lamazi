@@ -71,11 +71,17 @@ LAMAZI Sweets is a production-grade e-commerce web application for a cake and sw
 - ✅ **Delivery Zones admin** — map preview removed (per request).
 - ✅ **Product card click-anywhere** — entire card opens the modal.
 
+## Updates (2026-05-16, iteration 3)
+- ✅ **Home page crash fixed**: `Home.jsx` was using `L(c, 'name')` inside category map but missing `const { L } = useLang()` destructure. Added — Error Boundary no longer triggers. Verified via screenshot.
+- ✅ **Webhook GETs**: `/api/tap/webhook` and `/api/armada/webhook` confirmed returning 200 JSON with friendly status message (no more 405s in browser).
+- ✅ **Payment tagging verified**: backend `_save_order` writes `payment_method:tap` (or `cash`) + `transaction_id`; `AdminOrders.jsx` parses notes regex to flag "Online" vs "COD".
+
 ## Next tasks
 1. After GitHub push, deploy to Render and Vercel per DEPLOYMENT.md (now beginner-friendly with troubleshooting).
 2. Once live, register Tap + Armada webhooks against the Render URL.
 3. Insert the admin row in `public.users` (Supabase dashboard).
 4. Enable Realtime on the `orders` table (Database → Replication).
+5. (Deferred from this session by user) Verify audio alert loops on new pending orders in `/admin/orders`.
 
 ## Known constraints / behaviours
 - Live Tap & Armada keys are in use. Test charges may produce real authorisations — rotate keys after demo.

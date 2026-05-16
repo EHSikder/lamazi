@@ -17,6 +17,7 @@ const HERO_IMAGE = 'https://i.pinimg.com/originals/48/b9/13/48b913ee1e3f11a466aa
 
 export default function Home() {
   const navigate = useNavigate();
+  const { L } = useLang();
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
