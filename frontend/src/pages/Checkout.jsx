@@ -63,6 +63,27 @@ function pointInPolygon([lng, lat], polygon) {
   return inside;
 }
 
+// Auto-detect [lat,lng] vs [lng,lat] storage and normalise to [lng, lat]
+// (Kuwait: lat ~28–30, lng ~46–49 — if first value > 45 it's lng-first).
+function normaliseRingToLngLat(ring) {
+  if (!Array.isArray(ring) || ring.length === 0) return [];
+  // Some payloads come as GeoJSON: { type:'Polygon', coordinates:[[[lng,lat],...]] }
+  // Strip if needed (already handled by caller, but be defensive).
+  const first = ring[0];
+  if (!Array.isArray(first) || first.length < 2) return [];
+  const sample = Number(first[0]);
+  // If first value looks like a Kuwait longitude (>45) we already have [lng,lat].
+  const isLngFirst = Math.abs(sample) > 45;
+  return ring
+    .map((pt) => {
+      const a = Number(pt[0]);
+      const b = Number(pt[1]);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      return isLngFirst ? [a, b] : [b, a];
+    })
+    .filter(Boolean);
+}
+
 export default function Checkout() {
   const navigate = useNavigate();
   const { items, subtotal, clear } = useCart();
@@ -123,9 +144,8 @@ export default function Checkout() {
       setPhone(profile.phone || '');
       setEmail(profile.email || '');
     }
-    if (user?.id) refreshProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, profile?.id]);
+  }, [profile?.id]);
 
   const matchedZone = useMemo(() => {
     if (!position) return null;

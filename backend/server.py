@@ -832,9 +832,9 @@ async def customer_check_exists(email: Optional[str] = None, phone: Optional[str
 @api.get('/customer/{customer_id}')
 async def customer_get(customer_id: str):
     rows = await sb_select('customers', params={'id': f'eq.{customer_id}', 'select': '*'})
-    if not rows:
-        raise HTTPException(status_code=404, detail='Customer not found')
-    return rows[0]
+    # Return null with 200 instead of 404 so authenticated users who don't yet
+    # have a `customers` row (e.g. admin-only accounts) don't spam the console.
+    return rows[0] if rows else None
 
 
 @api.get('/customer/{customer_id}/orders')
