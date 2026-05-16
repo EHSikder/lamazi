@@ -1,6 +1,13 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Instagram, Facebook, MessageCircle } from 'lucide-react';
+import { Instagram } from 'lucide-react';
+
+// TikTok doesn't exist in lucide-react so we use a simple inline SVG
+const TikTokIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.75a8.27 8.27 0 0 0 4.84 1.54V6.84a4.85 4.85 0 0 1-1.07-.15z" />
+  </svg>
+);
 
 export default function Footer() {
   const loc = useLocation();
@@ -18,10 +25,10 @@ export default function Footer() {
         </div>
 
         <nav className="grid grid-cols-2 gap-4 text-sm">
-          <Link to="/menu" className="hover:text-lamazi-secondary transition-colors" data-testid="footer-menu">Menu</Link>
-          <Link to="/about" className="hover:text-lamazi-secondary transition-colors" data-testid="footer-about">About Us</Link>
+          <Link to="/menu"    className="hover:text-lamazi-secondary transition-colors" data-testid="footer-menu">Menu</Link>
+          <Link to="/about"   className="hover:text-lamazi-secondary transition-colors" data-testid="footer-about">About Us</Link>
           <Link to="/loyalty" className="hover:text-lamazi-secondary transition-colors" data-testid="footer-loyalty">Loyalty Program</Link>
-          <Link to="/auth" className="hover:text-lamazi-secondary transition-colors" data-testid="footer-account">Account</Link>
+          <Link to="/auth"    className="hover:text-lamazi-secondary transition-colors" data-testid="footer-account">Account</Link>
           <span className="hover:text-lamazi-secondary cursor-pointer transition-colors">Terms & Conditions</span>
           <span className="hover:text-lamazi-secondary cursor-pointer transition-colors">Privacy Policy</span>
         </nav>
@@ -31,14 +38,23 @@ export default function Footer() {
             Stay close
           </p>
           <div className="flex gap-3">
-            <a href="#" aria-label="Instagram" className="p-2.5 rounded-full bg-lamazi-primary/40 hover:bg-lamazi-secondary hover:text-lamazi-primary transition-colors">
+            <a
+              href="https://www.instagram.com/lamazi_kw"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+              className="p-2.5 rounded-full bg-lamazi-primary/40 hover:bg-lamazi-secondary hover:text-lamazi-primary transition-colors"
+            >
               <Instagram className="w-4 h-4" />
             </a>
-            <a href="#" aria-label="Facebook" className="p-2.5 rounded-full bg-lamazi-primary/40 hover:bg-lamazi-secondary hover:text-lamazi-primary transition-colors">
-              <Facebook className="w-4 h-4" />
-            </a>
-            <a href="#" aria-label="WhatsApp" className="p-2.5 rounded-full bg-lamazi-primary/40 hover:bg-lamazi-secondary hover:text-lamazi-primary transition-colors">
-              <MessageCircle className="w-4 h-4" />
+            <a
+              href="https://www.tiktok.com/@lamazi_kw"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="TikTok"
+              className="p-2.5 rounded-full bg-lamazi-primary/40 hover:bg-lamazi-secondary hover:text-lamazi-primary transition-colors"
+            >
+              <TikTokIcon />
             </a>
           </div>
           <p className="text-xs text-lamazi-neutral/60">Hawally, Kuwait · Open daily 1:00 PM – 12:30 AM</p>

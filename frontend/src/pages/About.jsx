@@ -2,9 +2,9 @@ import React from 'react';
 import { Heart, Leaf, Sparkles } from 'lucide-react';
 
 // TODO: Replace with real YouTube Shorts IDs if you want different videos.
-const SHORTS = ['kocNGCZ1aaA', 'JeOE9XrjA9k', 'tN6MNnqD-Jk', 'kocNGCZ1aaA'];
+const SHORTS = ['/videos/short1.mp4', '/videos/short2.mp4', '/videos/short3.mp4', '/videos/short4.mp4'];
 
-const STORY_IMG_1 = 'https://i.pinimg.com/1200x/e5/3b/d9/e53bd90ed872b4701612019613b07f4e.jpg';
+const STORY_IMG_1 = 'https://i.pinimg.com/1200x/6c/1e/02/6c1e02193d9240b83c53ee19ae52afb3.jpg';
 const STORY_IMG_2 = 'https://i.pinimg.com/1200x/94/1d/a4/941da4802d575f226fb4ad9415c1dd94.jpg';
 
 export default function About() {
@@ -74,13 +74,14 @@ export default function About() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {SHORTS.map((id, i) => (
             <div key={`${id}-${i}`} className="aspect-[9/16] rounded-2xl overflow-hidden bg-black/5 shadow-md">
-              <iframe
-                className="w-full h-full"
-                src={`https://www.youtube.com/embed/${id}`}
-                title={`Lamazi short ${i + 1}`}
-                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+            <video
+             className="w-full h-full object-cover"
+             src={id}
+             autoPlay
+             muted
+             loop
+             playsInline
+            />
             </div>
           ))}
         </div>
