@@ -9,7 +9,7 @@ import { ChevronRight, Sparkles, Heart, Award, Play } from 'lucide-react';
 // TODO: Replace with real YouTube video IDs if you want different videos.
 const VIDEOS = {
   main: '2heBxQ-RJhM',
-  secondary1: '2heBxQ-RJhM',
+  secondary1: 'Cvuh7NkCggI',
   secondary2: '2heBxQ-RJhM',
 };
 

@@ -4,6 +4,7 @@ import { supabase, TENANT_ID, BRANCH_ID } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Check, X, Eye, BellRing, Volume2, VolumeX, Phone, Package, CheckCircle2, Truck } from 'lucide-react';
 import { fmtKWD } from '@/lib/utils-app';
+import OrderReceipt from '@/components/OrderReceipt';
 
 const STATUS_BADGES = {
   pending: 'bg-amber-100 text-amber-900 border-amber-300',
@@ -448,6 +449,13 @@ function OrderDetailModal({ id, onClose, onChanged }) {
               )}
             </div>
           </section>
+
+          {/* Receipt */}
+          <section>
+            <p className="text-xs uppercase tracking-widest text-lamazi-muted mb-2">Receipt</p>
+            <OrderReceipt order={order} mode="print" />
+          </section>
+
         </div>
       </div>
     </div>

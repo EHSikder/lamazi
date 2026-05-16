@@ -4,27 +4,27 @@ import { api, apiError } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { Clock, CheckCircle2, XCircle, Package, Truck, ChefHat, ChevronLeft } from 'lucide-react';
 import { fmtKWD } from '@/lib/utils-app';
+import OrderReceipt from '@/components/OrderReceipt';
 
 const STATUS_FLOW_DELIVERY = [
-  { key: 'pending', label: 'Waiting for confirmation', icon: Clock },
-  { key: 'accepted', label: 'Order confirmed', icon: CheckCircle2 },
-  { key: 'preparing', label: 'Preparing', icon: ChefHat },
-  { key: 'packing', label: 'Packing', icon: Package },
-  { key: 'out_for_delivery', label: 'Out for delivery', icon: Truck },
-  { key: 'delivered', label: 'Delivered', icon: CheckCircle2 },
+  { key: 'pending',          label: 'Waiting for confirmation', icon: Clock },
+  { key: 'accepted',         label: 'Order confirmed',          icon: CheckCircle2 },
+  { key: 'preparing',        label: 'Preparing',                icon: ChefHat },
+  { key: 'packing',          label: 'Packing',                  icon: Package },
+  { key: 'out_for_delivery', label: 'Out for delivery',         icon: Truck },
+  { key: 'delivered',        label: 'Delivered',                icon: CheckCircle2 },
 ];
 
 const STATUS_FLOW_PICKUP = [
-  { key: 'pending', label: 'Waiting for confirmation', icon: Clock },
-  { key: 'accepted', label: 'Order confirmed', icon: CheckCircle2 },
-  { key: 'preparing', label: 'Preparing', icon: ChefHat },
-  { key: 'packing', label: 'Ready for pickup', icon: Package },
-  { key: 'delivered', label: 'Picked up', icon: CheckCircle2 },
+  { key: 'pending',   label: 'Waiting for confirmation', icon: Clock },
+  { key: 'accepted',  label: 'Order confirmed',          icon: CheckCircle2 },
+  { key: 'preparing', label: 'Preparing',                icon: ChefHat },
+  { key: 'packing',   label: 'Ready for pickup',         icon: Package },
+  { key: 'delivered', label: 'Picked up',                icon: CheckCircle2 },
 ];
 
 function statusIndex(status, flow) {
-  const i = flow.findIndex((s) => s.key === status);
-  return i;
+  return flow.findIndex((s) => s.key === status);
 }
 
 export default function OrderTracking() {
@@ -68,9 +68,10 @@ export default function OrderTracking() {
   }
 
   const isPickup = order.order_type === 'takeaway';
-  const flow = isPickup ? STATUS_FLOW_PICKUP : STATUS_FLOW_DELIVERY;
+  const flow     = isPickup ? STATUS_FLOW_PICKUP : STATUS_FLOW_DELIVERY;
   const rejected = order.status === 'rejected' || order.status === 'cancelled';
-  const idx = statusIndex(order.status, flow);
+  const idx      = statusIndex(order.status, flow);
+  const isDelivered = order.status === 'delivered';
 
   return (
     <div className="container-lamazi py-10" data-testid="order-tracking">
@@ -82,10 +83,14 @@ export default function OrderTracking() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+
+          {/* ── Status tracker ── */}
           {rejected ? (
             <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center">
               <XCircle className="w-10 h-10 text-rose-600 mx-auto mb-2" />
-              <h2 className="font-display text-2xl text-rose-800 mb-1">Order {order.status === 'rejected' ? 'rejected' : 'cancelled'}</h2>
+              <h2 className="font-display text-2xl text-rose-800 mb-1">
+                Order {order.status === 'rejected' ? 'rejected' : 'cancelled'}
+              </h2>
               <p className="text-sm text-rose-700">If you have questions, please call us.</p>
             </div>
           ) : (
@@ -93,9 +98,9 @@ export default function OrderTracking() {
               <h2 className="font-display text-xl text-lamazi-primary mb-6">Status</h2>
               <div className="space-y-4">
                 {flow.map((s, i) => {
-                  const Active = i <= idx;
+                  const Active  = i <= idx;
                   const Current = i === idx;
-                  const Icon = s.icon;
+                  const Icon    = s.icon;
                   return (
                     <div key={s.key} className="flex items-center gap-4">
                       <div className={`relative w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
@@ -114,6 +119,7 @@ export default function OrderTracking() {
             </div>
           )}
 
+          {/* ── Items ── */}
           <div className="bg-white rounded-2xl border border-lamazi-secondary/40 p-6">
             <h2 className="font-display text-xl text-lamazi-primary mb-4">Items</h2>
             <div className="divide-y divide-lamazi-secondary/40">
@@ -132,14 +138,27 @@ export default function OrderTracking() {
               ))}
             </div>
           </div>
+
+          {/* ── Receipt (shown once order is delivered) ── */}
+          {isDelivered && (
+            <div className="bg-white rounded-2xl border border-lamazi-secondary/40 p-6">
+              <h2 className="font-display text-xl text-lamazi-primary mb-1">Your Receipt</h2>
+              <p className="text-sm text-lamazi-muted mb-4">Save a copy of your receipt as an image.</p>
+              <OrderReceipt order={order} mode="download" />
+            </div>
+          )}
+
         </div>
 
+        {/* ── Sidebar summary ── */}
         <aside>
           <div className="cream-card sticky top-24" data-testid="order-summary-sidebar">
             <h3 className="font-display text-lg text-lamazi-primary font-semibold mb-3">Summary</h3>
             <div className="space-y-1.5 text-sm">
-              <Row label="Subtotal" value={fmtKWD(order.subtotal)} />
-              {Number(order.discount_amount) > 0 && <Row label="Discount" value={`− ${fmtKWD(order.discount_amount)}`} pos />}
+              <Row label="Subtotal"     value={fmtKWD(order.subtotal)} />
+              {Number(order.discount_amount) > 0 && (
+                <Row label="Discount" value={`− ${fmtKWD(order.discount_amount)}`} pos />
+              )}
               <Row label="Delivery fee" value={fmtKWD(order.delivery_fee)} />
               <div className="border-t border-lamazi-secondary/60 my-2" />
               <div className="flex justify-between text-base">
