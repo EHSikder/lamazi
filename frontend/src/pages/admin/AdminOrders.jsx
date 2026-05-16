@@ -30,6 +30,16 @@ function extractTxId(order) {
   return order?.transaction_id || (order?.notes && (order.notes.match(/tap_id:([\w-]+)/) || [])[1]) || null;
 }
 
+function isOnlinePayment(order) {
+  // Reliable order: payment_method tag in notes (always set on order creation)
+  if (order?.notes && /payment_method:tap/.test(order.notes)) return true;
+  if (order?.notes && /payment_method:cash/.test(order.notes)) return false;
+  // Fallbacks for legacy orders without the tag
+  if (order?.payment_status === 'paid') return true;
+  if (extractTxId(order)) return true;
+  return false;
+}
+
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('pending');
@@ -210,11 +220,15 @@ export default function AdminOrders() {
 }
 
 function OrderCard({ order, onAccept, onReject, onMarkReady, onDelivered, onCallDriver, onView }) {
-  const isOnline = order.payment_status === 'paid' || extractTxId(order);
+  const isOnline = isOnlinePayment(order);
   const txId = extractTxId(order);
   const armadaCalled = hasArmadaCode(order);
   const armadaCode = getArmadaCode(order);
   const isDelivery = order.order_type === 'delivery';
+  // Payment status sub-label for online orders
+  const paymentSubLabel = isOnline
+    ? (order.payment_status === 'paid' ? 'Paid' : 'Awaiting payment')
+    : null;
 
   return (
     <div className="bg-white rounded-2xl border-2 border-lamazi-secondary/40 p-5 hover:border-lamazi-primary/40 transition-colors shadow-sm" data-testid={`order-card-${order.id}`}>
@@ -233,6 +247,11 @@ function OrderCard({ order, onAccept, onReject, onMarkReady, onDelivered, onCall
         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isOnline ? 'bg-blue-100 text-blue-900' : 'bg-emerald-100 text-emerald-900'}`}>
           {isOnline ? 'Online' : 'COD'}
         </span>
+        {paymentSubLabel && (
+          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${order.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}>
+            {paymentSubLabel}
+          </span>
+        )}
         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDelivery ? 'bg-violet-100 text-violet-900' : 'bg-amber-100 text-amber-900'}`}>
           {isDelivery ? 'Delivery' : 'Pickup'}
         </span>
@@ -325,7 +344,7 @@ function OrderDetailModal({ id, onClose, onChanged }) {
   }, [id]);
 
   if (!order) return null;
-  const isOnline = order.payment_status === 'paid' || extractTxId(order);
+  const isOnline = isOnlinePayment(order);
   const txId = extractTxId(order);
   const armadaCode = getArmadaCode(order);
   const addr = order.delivery_address;

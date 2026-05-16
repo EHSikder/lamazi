@@ -1,7 +1,19 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 
 const STORAGE_KEY = 'lamazi_lang';
-const LangContext = createContext(null);
+
+// Safe default so useLang() never returns null (defensive — prevents Home crash if
+// a component renders before the provider in some edge production builds).
+const DEFAULT_VALUE = {
+  lang: 'en',
+  isRtl: false,
+  toggle: () => {},
+  t: (key) => key,
+  L: (obj, field) => (obj ? (obj[`${field}_en`] || obj[`${field}_ar`] || '') : ''),
+  setLang: () => {},
+};
+
+const LangContext = createContext(DEFAULT_VALUE);
 
 // Simple UI label dictionary. Only customer-facing strings. Admin stays EN.
 const T = {
@@ -89,4 +101,4 @@ export function LanguageProvider({ children }) {
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
 }
 
-export const useLang = () => useContext(LangContext);
+export const useLang = () => useContext(LangContext) || DEFAULT_VALUE;

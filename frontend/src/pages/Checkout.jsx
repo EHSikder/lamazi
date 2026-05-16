@@ -132,12 +132,11 @@ export default function Checkout() {
     const [lat, lng] = position;
     for (const z of zones) {
       const coords = z.coordinates;
-      const ring = Array.isArray(coords) ? coords : (coords?.coordinates?.[0] || []);
-      if (!ring?.length) continue;
-      const normalised = ring[0].length === 2 && Math.abs(ring[0][0]) <= 180
-        ? ring                        // [lng,lat]
-        : ring.map(([a, b]) => [b, a]); // swap if user stored [lat,lng]
-      if (pointInPolygon([lng, lat], normalised)) return z;
+      const rawRing = Array.isArray(coords) ? coords : (coords?.coordinates?.[0] || []);
+      if (!rawRing?.length) continue;
+      const ring = normaliseRingToLngLat(rawRing);
+      if (ring.length < 3) continue;
+      if (pointInPolygon([lng, lat], ring)) return z;
     }
     return null;
   }, [position, zones]);
@@ -377,10 +376,11 @@ export default function Checkout() {
                   />
                   <MapClickHandler onPick={handleMapPick} />
                   {zones.map((z) => {
-                    const ring = Array.isArray(z.coordinates) ? z.coordinates : (z.coordinates?.coordinates?.[0] || []);
-                    if (!ring?.length) return null;
-                    // assume [lng,lat] storage → flip for Leaflet which wants [lat,lng]
-                    const positions = ring.map(([a, b]) => Math.abs(a) <= 180 ? [b, a] : [a, b]);
+                    const rawRing = Array.isArray(z.coordinates) ? z.coordinates : (z.coordinates?.coordinates?.[0] || []);
+                    if (!rawRing?.length) return null;
+                    // Convert to [lat, lng] for Leaflet (which expects that order)
+                    const lngLat = normaliseRingToLngLat(rawRing);
+                    const positions = lngLat.map(([lng, lat]) => [lat, lng]);
                     return <Polygon key={z.id} positions={positions} pathOptions={{ color: '#58000e', weight: 1.5, fillOpacity: 0.06 }} />;
                   })}
                   {position && <Marker position={position} />}

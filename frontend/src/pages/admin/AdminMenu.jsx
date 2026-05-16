@@ -163,8 +163,7 @@ function LinkModifiers({ item, onClose }) {
     setGroups(g.data || []);
     setLinks(l.data || []);
   };
-  useEffect(() => { load(); }, [item.id]);
-
+  
   const toggle = async (g) => {
     const existing = links.find((l) => l.modifier_group_id === g.id);
     try {

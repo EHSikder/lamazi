@@ -507,6 +507,8 @@ async def _save_order(req: CreateOrderRequest, *, payment_status: str, transacti
         extra_notes_parts.append(f'guest_id:{req.guest_id}')
     if req.coupon_code:
         extra_notes_parts.append(f'coupon:{req.coupon_code.upper()}')
+    # Always store payment method so admin can identify online vs cash at a glance
+    extra_notes_parts.append(f'payment_method:{req.payment_method or "cash"}')
     notes_combined = ' | '.join(extra_notes_parts) if extra_notes_parts else None
 
     order_row = {
@@ -530,6 +532,7 @@ async def _save_order(req: CreateOrderRequest, *, payment_status: str, transacti
         'service_charge': 0,
         'total_amount': req.total_amount,
         'payment_status': payment_status,
+        'transaction_id': transaction_id,
         'notes': notes_combined,
     }
     await sb_insert('orders', order_row)
@@ -757,6 +760,17 @@ async def tap_webhook(request: Request):
     except Exception as e:
         logger.error('webhook err: %s', e)
         return {'received': True}
+
+
+@api.get('/tap/webhook')
+async def tap_webhook_info():
+    """Friendly GET response so admins browsing the URL know it's working but POST-only."""
+    return {
+        'endpoint': '/api/tap/webhook',
+        'method': 'POST',
+        'status': 'ready',
+        'message': 'This endpoint accepts POST requests from Tap Payments only. Browsing it in a browser will always show Method Not Allowed — that is correct. Register this URL in your Tap dashboard.',
+    }
 
 
 @api.get('/orders/{order_id}')
@@ -1019,6 +1033,17 @@ async def armada_webhook(request: Request):
     except Exception as e:
         logger.error('armada webhook err: %s', e)
         return {'received': True}
+
+
+@api.get('/armada/webhook')
+async def armada_webhook_info():
+    """Friendly GET response so admins browsing the URL know it's working but POST-only."""
+    return {
+        'endpoint': '/api/armada/webhook',
+        'method': 'POST',
+        'status': 'ready',
+        'message': 'This endpoint accepts POST requests from Armada Deliveries only. Browsing it in a browser will always show Method Not Allowed — that is correct. Register this URL in your Armada dashboard.',
+    }
 
 
 @api.get('/admin/dashboard')
